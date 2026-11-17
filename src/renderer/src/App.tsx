@@ -1,48 +1,86 @@
-import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import {
   childFolders,
   descendantPhotoCount,
   folderById,
+  folderPath,
   folderPathString,
-  folders,
   formatBytes,
-  photos as seedPhotos,
+  setRuntimeLibrary,
   sortPhotos,
   totalSize,
-  type Photo,
+  type Folder,
+  type Photo
 } from "./data";
+import { demoFolders, demoPhotos } from "./demo-data";
+import { desktop, isDesktop, trashLabel } from "./lib/bridge";
+import { convertImage, formatInfo, mimeForFileName, resizeImage } from "./lib/imaging";
+import type { SystemPaths } from "../../shared/api";
+import { localFileUrl } from "../../shared/api";
 import { BrandIcon, FileTypeIcon, FolderGlyph, ToolIcon } from "./icons";
 import MenuBar, { type MenuDef } from "./components/MenuBar";
 import BrowserView, { StatusBar, type ThumbSize, type ViewMode } from "./components/BrowserView";
 import { Inspector, TreePane } from "./components/Panels";
 import Viewer from "./components/Viewer";
 import DialogHost, { type DialogState } from "./components/Dialogs";
-import Shell, { type WindowState } from "./components/Shell";
 
 type Toast = { id: number; title: string; message: string };
 type ClipboardState = { ids: string[]; mode: "copy" | "cut" } | null;
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+const THUMB_PX: Record<ThumbSize, number> = { small: 96, medium: 192, large: 320 };
 
-function ancestorsOf(id: string): string[] {
+function formatFromExt(ext: string): string {
+  switch (ext.toLowerCase()) {
+    case ".jpg":
+    case ".jpeg":
+      return "JPEG";
+    case ".png":
+      return "PNG";
+    case ".gif":
+      return "GIF";
+    case ".bmp":
+      return "BMP";
+    case ".tif":
+    case ".tiff":
+      return "TIFF";
+    case ".webp":
+      return "WEBP";
+    case ".svg":
+      return "SVG";
+    case ".avif":
+      return "AVIF";
+    case ".heic":
+    case ".heif":
+      return "HEIC";
+    default:
+      return ext ? ext.replace(".", "").toUpperCase() : "Image";
+  }
+}
+
+function ancestorsOf(id: string, all: Folder[]): string[] {
+  const byId = new Map(all.map((f) => [f.id, f]));
   const result: string[] = [];
-  let current = folderById(id);
-  while (current) {
+  let current = byId.get(id);
+  let guard = 0;
+  while (current && guard++ < 40) {
     result.push(current.id);
-    current = current.parent ? folderById(current.parent) : undefined;
+    current = current.parent ? byId.get(current.parent) : undefined;
   }
   return result;
 }
 
-const initialPhoto = seedPhotos.find((p) => p.folderId === "vacation-2001")!;
-
 export default function App() {
-  const [library, setLibrary] = useState<Photo[]>(seedPhotos);
-  const [currentFolderId, setCurrentFolderId] = useState("vacation-2001");
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(ancestorsOf("vacation-2001")));
-  const [history, setHistory] = useState<{ items: string[]; index: number }>({ items: ["vacation-2001"], index: 0 });
-  const [selectedIds, setSelectedIds] = useState<string[]>([initialPhoto.id]);
-  const [anchorId, setAnchorId] = useState<string | null>(initialPhoto.id);
+  const [desktopMode] = useState(() => isDesktop());
+  const [ready, setReady] = useState(false);
+  const [sysPaths, setSysPaths] = useState<SystemPaths | null>(null);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [photoCache, setPhotoCache] = useState<Record<string, Photo[]>>({});
+  const [currentFolderId, setCurrentFolderId] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [history, setHistory] = useState<{ items: string[]; index: number }>({ items: [], index: -1 });
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [anchorId, setAnchorId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("thumbnails");
   const [thumbSize, setThumbSize] = useState<ThumbSize>("medium");
   const [sortKey, setSortKey] = useState("name");
@@ -59,16 +97,234 @@ export default function App() {
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
-  const [wallpaper, setWallpaper] = useState<string | null>(null);
-  const [windowState, setWindowState] = useState<WindowState>("normal");
   const [clipboard, setClipboard] = useState<ClipboardState>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [zoomed, setZoomed] = useState(false);
   const [prefs, setPrefs] = useState({ showThumbs: true, showExtensions: true });
+
+  const foldersRef = useRef<Folder[]>([]);
+  const cacheRef = useRef<Record<string, Photo[]>>({});
+  const childrenLoadedRef = useRef<Set<string>>(new Set());
+  const exifDoneRef = useRef<Set<string>>(new Set());
+  const loadSeqRef = useRef(0);
+  const thumbSizeRef = useRef<ThumbSize>("medium");
+  foldersRef.current = folders;
+  cacheRef.current = photoCache;
+  thumbSizeRef.current = thumbSize;
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  const folder = folderById(currentFolderId) ?? folderById("my-pictures")!;
-  const children = childFolders(currentFolderId);
-  const directPhotos = library.filter((p) => p.folderId === currentFolderId);
+  const notify = (message: string, title = "ACDSee Classic") =>
+    setToast({ id: Date.now(), title, message });
+
+  const mergeFolders = (incoming: Folder[]) => {
+    if (!incoming.length) return;
+    setFolders((prev) => {
+      const byId = new Map(prev.map((f) => [f.id, f]));
+      for (const folder of incoming) byId.set(folder.id, { ...byId.get(folder.id), ...folder });
+      return [...byId.values()];
+    });
+  };
+
+  const patchPhotos = (folderId: string, patch: (photos: Photo[]) => Photo[]) => {
+    setPhotoCache((prev) => ({ ...prev, [folderId]: patch(prev[folderId] ?? []) }));
+  };
+
+  /** Update one photo everywhere it is cached (ids are globally unique). */
+  const patchPhotoEverywhere = (id: string, patch: (photo: Photo) => Photo) => {
+    setPhotoCache((prev) => {
+      const next: Record<string, Photo[]> = {};
+      for (const [folderId, photos] of Object.entries(prev)) {
+        next[folderId] = photos.map((p) => (p.id === id ? patch(p) : p));
+      }
+      return next;
+    });
+  };
+
+  const ensureChildren = async (id: string): Promise<void> => {
+    if (!desktopMode || childrenLoadedRef.current.has(id)) return;
+    childrenLoadedRef.current.add(id);
+    try {
+      const children = await desktop().listChildren(id);
+      mergeFolders(children.map((c) => ({ ...c, parent: id })));
+    } catch (error) {
+      childrenLoadedRef.current.delete(id);
+      notify(error instanceof Error ? error.message : String(error), "Folders");
+    }
+  };
+
+  const loadDir = async (id: string, options: { selectFirst?: boolean } = {}): Promise<Photo[]> => {
+    const folder = foldersRef.current.find((f) => f.id === id);
+    if (!folder) return [];
+    if (!folder.path) {
+      // Virtual node (My Computer): folders only, no files.
+      await ensureChildren(id);
+      if (options.selectFirst) {
+        setSelectedIds([]);
+        setAnchorId(null);
+      }
+      return [];
+    }
+    const seq = ++loadSeqRef.current;
+    let listing;
+    try {
+      listing = await desktop().listDir(folder.path);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error), folder.name);
+      return [];
+    }
+    if (seq !== loadSeqRef.current) return [];
+    mergeFolders(
+      listing.folders.map((entry) => ({
+        id: entry.path,
+        name: entry.name,
+        icon: "folder" as const,
+        path: entry.path,
+        parent: id
+      }))
+    );
+    // Carry view state (rotation, rating, EXIF) across reloads.
+    const previous = new Map((cacheRef.current[id] ?? []).map((p) => [p.id, p]));
+    const photos: Photo[] = listing.files.map((entry) => {
+      const old = previous.get(entry.path);
+      return {
+        id: entry.path,
+        name: entry.name,
+        folderId: id,
+        src: "",
+        fullSrc: localFileUrl(entry.path),
+        path: entry.path,
+        width: old?.width ?? 0,
+        height: old?.height ?? 0,
+        size: entry.size,
+        date: new Date(entry.mtimeMs).toISOString(),
+        camera: old?.camera ?? "",
+        make: old?.make ?? "",
+        exposure: old?.exposure ?? "",
+        aperture: old?.aperture ?? "",
+        iso: old?.iso ?? 0,
+        focal: old?.focal ?? "",
+        flash: old?.flash ?? "",
+        format: old?.format ?? formatFromExt(entry.ext),
+        rotation: old?.rotation ?? 0,
+        flipped: old?.flipped ?? false,
+        rating: old?.rating ?? 0,
+        tags: old?.tags ?? []
+      };
+    });
+    setPhotoCache((prev) => ({ ...prev, [id]: photos }));
+    if (options.selectFirst) {
+      setSelectedIds(photos[0] ? [photos[0].id] : []);
+      setAnchorId(photos[0]?.id ?? null);
+    }
+    void ensureChildren(id);
+
+    // Progressive enrichment: thumbnails, then dimensions.
+    const paths = photos.map((p) => p.path);
+    if (paths.length) {
+      desktop()
+        .thumbs(paths, THUMB_PX[thumbSizeRef.current])
+        .then((results) => {
+          const byPath = new Map(results.map((r) => [r.path, r.dataUrl]));
+          patchPhotos(id, (items) =>
+            items.map((p) => {
+              const url = byPath.get(p.path);
+              return url ? { ...p, src: url } : p;
+            })
+          );
+        })
+        .catch(() => undefined);
+      void (async () => {
+        const CHUNK = 8;
+        for (let i = 0; i < paths.length; i += CHUNK) {
+          const chunk = paths.slice(i, i + CHUNK);
+          const metas = await Promise.all(chunk.map((p) => desktop().imageMeta(p).catch(() => null)));
+          const byPath = new Map<string, { width: number; height: number; format: string }>();
+          chunk.forEach((p, index) => {
+            const meta = metas[index];
+            if (meta) byPath.set(p, meta);
+          });
+          if (byPath.size) {
+            patchPhotos(id, (items) =>
+              items.map((p) => {
+                const meta = byPath.get(p.path);
+                return meta ? { ...p, width: meta.width, height: meta.height, format: meta.format || p.format } : p;
+              })
+            );
+          }
+        }
+      })();
+    }
+    return photos;
+  };
+
+  // Boot: real filesystem on desktop, demo library in a plain browser.
+  useEffect(() => {
+    let cancelled = false;
+    async function boot() {
+      if (!isDesktop()) {
+        if (cancelled) return;
+        setFolders(demoFolders);
+        const grouped: Record<string, Photo[]> = {};
+        for (const photo of demoPhotos) {
+          (grouped[photo.folderId] ??= []).push(photo);
+        }
+        setPhotoCache(grouped);
+        const start = "vacation-2001";
+        setCurrentFolderId(start);
+        setExpanded(new Set(ancestorsOf(start, demoFolders)));
+        setHistory({ items: [start], index: 0 });
+        const first = grouped[start]?.[0];
+        setSelectedIds(first ? [first.id] : []);
+        setAnchorId(first?.id ?? null);
+        setReady(true);
+        return;
+      }
+      try {
+        const paths = await desktop().systemPaths();
+        if (cancelled) return;
+        setSysPaths(paths);
+        const roots = await desktop().listRoots();
+        if (cancelled) return;
+        mergeFolders(roots.map((r) => ({ ...r })));
+        await Promise.all(roots.map((r) => ensureChildren(r.id)));
+        if (cancelled) return;
+        const pictures = roots.find((r) => r.icon === "pictures") ?? roots.find((r) => r.path) ?? roots[0];
+        const start = pictures.id;
+        try {
+          setZoomed(await desktop().window.isMaximized());
+        } catch {
+          // Non-fatal.
+        }
+        setCurrentFolderId(start);
+        setExpanded(new Set([start, ...roots.map((r) => r.id)]));
+        setHistory({ items: [start], index: 0 });
+        await loadDir(start, { selectFirst: true });
+        if (!cancelled) setReady(true);
+      } catch (error) {
+        if (cancelled) return;
+        notify(error instanceof Error ? error.message : String(error), "Startup");
+        setReady(true);
+      }
+    }
+    void boot();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const libraryFlat = useMemo(() => Object.values(photoCache).flat(), [photoCache]);
+  setRuntimeLibrary(folders, libraryFlat);
+
+  const folder: Folder = folderById(currentFolderId) ?? {
+    id: currentFolderId || "unknown",
+    name: "…",
+    icon: "folder",
+    parent: null,
+    path: ""
+  };
+  const children = useMemo(() => childFolders(currentFolderId), [folders, currentFolderId]);
+  const directPhotos = photoCache[currentFolderId] ?? [];
   const normalizedQuery = query.trim().toLowerCase();
   const filtered = normalizedQuery
     ? directPhotos.filter(
@@ -79,7 +335,7 @@ export default function App() {
       )
     : directPhotos;
   const visiblePhotos = sortPhotos(filtered, sortKey, sortDir);
-  const selectedPhotos = library.filter((p) => selectedIds.includes(p.id));
+  const selectedPhotos = libraryFlat.filter((p) => selectedIds.includes(p.id));
   const primary = selectedPhotos[0] ?? visiblePhotos[0] ?? null;
   const viewerPhotos = visiblePhotos;
   const totalBytes = totalSize(visiblePhotos);
@@ -87,8 +343,6 @@ export default function App() {
   const canForward = history.index < history.items.length - 1;
   const pathLabel = folderPathString(currentFolderId) || folder.name;
   const hasSelection = selectedPhotos.length > 0;
-
-  const notify = (message: string, title = "ACDSee 3.1") => setToast({ id: Date.now(), title, message });
 
   useEffect(() => {
     if (!toast) return;
@@ -109,17 +363,70 @@ export default function App() {
     };
   }, [contextMenu]);
 
-  const expandAncestors = (id: string) => setExpanded((prev) => new Set([...prev, ...ancestorsOf(id)]));
+  // Re-request thumbnails at the new size when the slider moves.
+  useEffect(() => {
+    if (!desktopMode || !ready || !folder.path) return;
+    const ids = (cacheRef.current[currentFolderId] ?? []).map((p) => p.path);
+    if (!ids.length) return;
+    desktop()
+      .thumbs(ids, THUMB_PX[thumbSize])
+      .then((results) => {
+        const byPath = new Map(results.map((r) => [r.path, r.dataUrl]));
+        patchPhotos(currentFolderId, (items) =>
+          items.map((p) => {
+            const url = byPath.get(p.path);
+            return url ? { ...p, src: url } : p;
+          })
+        );
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thumbSize]);
+
+  // Lazy EXIF for the preview/properties panes.
+  useEffect(() => {
+    if (!desktopMode || !primary?.path || exifDoneRef.current.has(primary.id)) return;
+    exifDoneRef.current.add(primary.id);
+    desktop()
+      .exif(primary.path)
+      .then((info) => {
+        if (!info) return;
+        patchPhotoEverywhere(primary.id, (p) => ({
+          ...p,
+          make: info.make ?? p.make,
+          camera: info.model ?? p.camera,
+          exposure: info.exposureTime ?? p.exposure,
+          aperture: info.fNumber ?? p.aperture,
+          iso: info.iso ?? p.iso,
+          focal: info.focalLength ?? p.focal,
+          flash: info.flash ?? p.flash
+        }));
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [primary?.id]);
+
+  const expandAncestors = (id: string) =>
+    setExpanded((prev) => new Set([...prev, ...ancestorsOf(id, foldersRef.current)]));
 
   const navigateTo = (id: string, push = true) => {
-    const nextDirect = library.filter((p) => p.folderId === id);
+    const target = foldersRef.current.find((f) => f.id === id);
+    if (!target) return;
     setCurrentFolderId(id);
-    setSelectedIds(nextDirect[0] ? [nextDirect[0].id] : []);
-    setAnchorId(nextDirect[0]?.id ?? null);
+    setSelectedIds([]);
+    setAnchorId(null);
     setQuery("");
     setViewerId(null);
     setSlideshow(false);
     expandAncestors(id);
+    if (desktopMode) {
+      void ensureChildren(id);
+      void loadDir(id, { selectFirst: true });
+    } else {
+      const nextDirect = cacheRef.current[id] ?? [];
+      setSelectedIds(nextDirect[0] ? [nextDirect[0].id] : []);
+      setAnchorId(nextDirect[0]?.id ?? null);
+    }
     if (push) {
       setHistory((prev) => {
         const items = [...prev.items.slice(0, prev.index + 1), id];
@@ -148,13 +455,22 @@ export default function App() {
     if (folder.parent) navigateTo(folder.parent);
   };
 
-  const refresh = () => {
+  const refresh = async () => {
     setRefreshing(true);
-    window.setTimeout(() => {
-      setRefreshing(false);
-      setLibrary((items) => [...items]);
-      notify(`"${folder.name}" refreshed. ${visiblePhotos.length} image${visiblePhotos.length === 1 ? "" : "s"} found.`, "Refresh");
-    }, 550);
+    try {
+      if (desktopMode && currentFolderId) {
+        childrenLoadedRef.current.delete(currentFolderId);
+        await ensureChildren(currentFolderId);
+        const photos = await loadDir(currentFolderId);
+        setSelectedIds((prev) => prev.filter((id) => photos.some((p) => p.id === id)));
+        notify(`"${folder.name}" refreshed. ${photos.length} image${photos.length === 1 ? "" : "s"} found.`, "Refresh");
+      } else {
+        setPhotoCache((prev) => ({ ...prev }));
+        notify(`"${folder.name}" refreshed. ${visiblePhotos.length} image${visiblePhotos.length === 1 ? "" : "s"} found.`, "Refresh");
+      }
+    } finally {
+      window.setTimeout(() => setRefreshing(false), 350);
+    }
   };
 
   const openPhoto = (id: string) => {
@@ -181,17 +497,26 @@ export default function App() {
       notify("Select an image to rotate.", "Rotate");
       return;
     }
-    setLibrary((items) =>
-      items.map((p) => (targets.includes(p.id) ? { ...p, rotation: (p.rotation + delta + 360) % 360 } : p))
-    );
-    notify(`Rotated ${targets.length} image${targets.length === 1 ? "" : "s"} ${delta > 0 ? "right" : "left"} by 90°.`, "Rotate");
+    setPhotoCache((prev) => {
+      const next: Record<string, Photo[]> = {};
+      for (const [folderId, photos] of Object.entries(prev)) {
+        next[folderId] = photos.map((p) =>
+          targets.includes(p.id) ? { ...p, rotation: (p.rotation + delta + 360) % 360 } : p
+        );
+      }
+      return next;
+    });
+    notify(`Rotated ${targets.length} image${targets.length === 1 ? "" : "s"} ${delta > 0 ? "right" : "left"} by ${Math.abs(delta)}°.`, "Rotate");
   };
 
-  const setAsWallpaper = (photo: Photo | null) => {
+  const setAsWallpaper = async (photo: Photo | null) => {
     if (!photo) return;
-    setWallpaper(photo.src);
-    setWindowState((state) => (state === "closed" || state === "minimized" ? "normal" : state));
-    notify(`"${photo.name}" is now displayed on your desktop. Choose another image, or use Start to restore the default desktop.`, "Set as Wallpaper");
+    if (!desktopMode || !photo.path) {
+      notify("Setting the wallpaper needs the desktop app.", "Set as Wallpaper");
+      return;
+    }
+    const result = await desktop().setWallpaper(photo.path);
+    notify(result.ok ? `"${photo.name}" is now your desktop wallpaper.` : result.message, "Set as Wallpaper");
   };
 
   const changeSort = (key: string) => {
@@ -243,7 +568,7 @@ export default function App() {
     setContextMenu({
       x: clamp(event.clientX, 8, window.innerWidth - 232),
       y: clamp(event.clientY, 8, window.innerHeight - 388),
-      id,
+      id
     });
   };
 
@@ -261,89 +586,231 @@ export default function App() {
       notify("There are no selected files to delete.", "Delete");
       return;
     }
-    setDialog({ kind: "delete", ids: selectedIds, fromRecycle: currentFolderId === "recycle-bin" });
+    setDialog({
+      kind: "delete",
+      ids: selectedIds,
+      names: selectedPhotos.map((p) => p.name),
+      trash: trashLabel(),
+      fromRecycle: false
+    });
   };
 
-  const commitDelete = () => {
+  const commitDelete = async () => {
     if (!dialog || dialog.kind !== "delete") return;
     const ids = dialog.ids;
-    if (dialog.fromRecycle) {
-      setLibrary((items) => items.filter((p) => !ids.includes(p.id)));
-      notify(`Permanently deleted ${ids.length} file${ids.length === 1 ? "" : "s"}.`, "Recycle Bin");
-    } else {
-      setLibrary((items) => items.map((p) => (ids.includes(p.id) ? { ...p, folderId: "recycle-bin" } : p)));
-      notify(`${ids.length} file${ids.length === 1 ? "" : "s"} moved to the Recycle Bin.`, "Delete");
+    if (desktopMode) {
+      const paths = libraryFlat.filter((p) => ids.includes(p.id)).map((p) => p.path).filter(Boolean);
+      try {
+        await desktop().trash(paths);
+        notify(`${ids.length} file${ids.length === 1 ? "" : "s"} moved to the ${trashLabel()}.`, "Delete");
+      } catch (error) {
+        notify(error instanceof Error ? error.message : String(error), "Delete");
+      }
+      setSelectedIds([]);
+      setDialog(null);
+      void loadDir(currentFolderId);
+      return;
     }
+    setPhotoCache((prev) => {
+      const next: Record<string, Photo[]> = {};
+      const moved: Photo[] = [];
+      for (const [folderId, photos] of Object.entries(prev)) {
+        next[folderId] = photos.filter((p) => {
+          if (ids.includes(p.id)) {
+            moved.push({ ...p, folderId: "recycle-bin" });
+            return false;
+          }
+          return true;
+        });
+      }
+      next["recycle-bin"] = [...(next["recycle-bin"] ?? []), ...moved];
+      return next;
+    });
+    notify(`${ids.length} file${ids.length === 1 ? "" : "s"} moved to the Recycle Bin.`, "Delete");
     setSelectedIds([]);
     setDialog(null);
   };
 
-  const commitTransfer = (target: string, mode: "copy" | "move") => {
+  const commitTransfer = async (target: string, mode: "copy" | "move") => {
     if (!dialog || dialog.kind !== "transfer") return;
     const ids = dialog.ids;
-    if (mode === "copy") {
-      const stamp = Date.now();
-      const copies = library
-        .filter((p) => ids.includes(p.id))
-        .map((p, index) => ({
-          ...p,
-          id: `${p.id}-copy-${stamp}-${index}`,
-          folderId: target,
-          name: p.name.replace(/\.(jpg|jpeg|png|bmp|tif|tiff)$/i, "") + " (Copy)" + p.name.slice(p.name.lastIndexOf(".")),
-        }));
-      setLibrary((items) => [...items, ...copies]);
-    } else {
-      setLibrary((items) => items.map((p) => (ids.includes(p.id) ? { ...p, folderId: target } : p)));
-    }
     const targetName = folderById(target)?.name ?? target;
+    if (desktopMode) {
+      const targetPath = folderById(target)?.path;
+      const paths = libraryFlat.filter((p) => ids.includes(p.id)).map((p) => p.path).filter(Boolean);
+      if (!targetPath) {
+        notify("Choose a real folder as the destination.", mode === "copy" ? "Copy to Folder" : "Move to Folder");
+        return;
+      }
+      try {
+        if (mode === "copy") await desktop().copyTo(paths, targetPath);
+        else await desktop().moveTo(paths, targetPath);
+        notify(`${mode === "copy" ? "Copied" : "Moved"} ${ids.length} file${ids.length === 1 ? "" : "s"} to "${targetName}".`, mode === "copy" ? "Copy to Folder" : "Move to Folder");
+      } catch (error) {
+        notify(error instanceof Error ? error.message : String(error), mode === "copy" ? "Copy to Folder" : "Move to Folder");
+      }
+      setDialog(null);
+      void loadDir(currentFolderId);
+      return;
+    }
+    const stamp = Date.now();
+    setPhotoCache((prev) => {
+      const flat = Object.values(prev).flat();
+      if (mode === "copy") {
+        const copies = flat
+          .filter((p) => ids.includes(p.id))
+          .map((p, index) => ({
+            ...p,
+            id: `${p.id}-copy-${stamp}-${index}`,
+            folderId: target,
+            name: p.name.replace(/\.(jpg|jpeg|png|bmp|tif|tiff|gif|webp)$/i, "") + " (Copy)" + p.name.slice(p.name.lastIndexOf("."))
+          }));
+        return { ...prev, [target]: [...(prev[target] ?? []), ...copies] };
+      }
+      const next: Record<string, Photo[]> = {};
+      for (const [folderId, photos] of Object.entries(prev)) {
+        next[folderId] = photos.filter((p) => !ids.includes(p.id));
+      }
+      const moved = flat.filter((p) => ids.includes(p.id)).map((p) => ({ ...p, folderId: target }));
+      next[target] = [...(next[target] ?? []), ...moved];
+      return next;
+    });
     notify(`${mode === "copy" ? "Copied" : "Moved"} ${ids.length} file${ids.length === 1 ? "" : "s"} to "${targetName}".`, mode === "copy" ? "Copy to Folder" : "Move to Folder");
     setDialog(null);
   };
 
-  const commitRename = (name: string) => {
+  const commitRename = async (name: string) => {
     if (!dialog || dialog.kind !== "rename") return;
-    setLibrary((items) => items.map((p) => (p.id === dialog.ids[0] ? { ...p, name } : p)));
+    const id = dialog.ids[0];
+    if (desktopMode) {
+      const photo = libraryFlat.find((p) => p.id === id);
+      if (!photo?.path) {
+        notify("Select a file to rename.", "Rename");
+        return;
+      }
+      try {
+        await desktop().rename(photo.path, name);
+        notify(`File renamed to "${name}".`, "Rename");
+      } catch (error) {
+        notify(error instanceof Error ? error.message : String(error), "Rename");
+      }
+      setDialog(null);
+      void loadDir(currentFolderId);
+      return;
+    }
+    patchPhotoEverywhere(id, (p) => ({ ...p, name }));
     notify(`File renamed to "${name}".`, "Rename");
     setDialog(null);
   };
 
-  const commitConvert = (format: string, quality: number, target: string) => {
+  const commitConvert = async (format: string, quality: number, target: string) => {
     if (!dialog || dialog.kind !== "convert") return;
     const ids = dialog.ids;
-    const ext = format === "JPEG" ? "jpg" : format.toLowerCase();
-    setLibrary((items) =>
-      items.map((p) =>
-        ids.includes(p.id)
-          ? {
-              ...p,
-              format: format as Photo["format"],
-              name: p.name.replace(/\.[^.]+$/, `.${ext}`),
-              folderId: target === "same-folder" ? p.folderId : target,
-            }
-          : p
-      )
-    );
+    if (desktopMode) {
+      const targetDir = target === "same-folder" ? folder.path : (folderById(target)?.path ?? folder.path);
+      if (!targetDir) {
+        notify("Choose a real folder for the converted files.", "Convert");
+        return;
+      }
+      const { ext } = formatInfo(format);
+      const targets = libraryFlat.filter((p) => ids.includes(p.id) && p.path);
+      let done = 0;
+      for (const photo of targets) {
+        try {
+          const { dataUrl } = await convertImage(photo.fullSrc, format, quality);
+          const base = photo.name.replace(/\.[^.]+$/, "");
+          await desktop().saveDataUrl(targetDir, `${base}.${ext}`, dataUrl);
+          done += 1;
+        } catch (error) {
+          notify(`"${photo.name}": ${error instanceof Error ? error.message : String(error)}`, "Convert");
+        }
+      }
+      notify(`${done} image${done === 1 ? "" : "s"} converted to ${format} at ${quality}% quality.`, "Convert");
+      setDialog(null);
+      if (targetDir === folder.path) void loadDir(currentFolderId);
+      return;
+    }
+    setPhotoCache((prev) => {
+      const next: Record<string, Photo[]> = {};
+      for (const [folderId, photos] of Object.entries(prev)) {
+        next[folderId] = photos.filter((p) => !(ids.includes(p.id) && target !== "same-folder" && target !== folderId));
+      }
+      const flat = Object.values(prev).flat();
+      const ext = format === "JPEG" ? "jpg" : format.toLowerCase();
+      for (const photo of flat.filter((p) => ids.includes(p.id))) {
+        const dest = target === "same-folder" ? photo.folderId : target;
+        const converted = { ...photo, format, name: photo.name.replace(/\.[^.]+$/, `.${ext}`), folderId: dest };
+        next[dest] = [...(next[dest] ?? []), converted];
+        if (dest === photo.folderId) next[dest] = next[dest].filter((p) => p.id !== photo.id || p === converted);
+      }
+      return next;
+    });
     notify(`${ids.length} image${ids.length === 1 ? "" : "s"} converted to ${format} at ${quality}% quality.`, "Convert");
     setDialog(null);
   };
 
-  const commitResize = (width: number, height: number) => {
+  const commitResize = async (width: number, height: number) => {
     if (!dialog || dialog.kind !== "resize") return;
-    setLibrary((items) => items.map((p) => (p.id === dialog.id ? { ...p, width, height } : p)));
-    notify(`Image resized to ${width} × ${height} pixels (demo metadata).`, "Resize");
+    const photo = libraryFlat.find((p) => p.id === dialog.id);
+    if (desktopMode) {
+      if (!photo?.path || !folder.path) {
+        notify("Select an image to resize.", "Resize");
+        return;
+      }
+      try {
+        const dataUrl = await resizeImage(photo.fullSrc, width, height, mimeForFileName(photo.name));
+        const dot = photo.name.lastIndexOf(".");
+        const base = dot >= 0 ? photo.name.slice(0, dot) : photo.name;
+        const ext = dot >= 0 ? photo.name.slice(dot) : ".jpg";
+        await desktop().saveDataUrl(folder.path, `${base} (Resized)${ext}`, dataUrl);
+        notify(`Saved a ${width} × ${height} copy of "${photo.name}".`, "Resize");
+      } catch (error) {
+        notify(error instanceof Error ? error.message : String(error), "Resize");
+      }
+      setDialog(null);
+      void loadDir(currentFolderId);
+      return;
+    }
+    if (photo) patchPhotoEverywhere(photo.id, (p) => ({ ...p, width, height }));
+    notify(`Image resized to ${width} × ${height} pixels.`, "Resize");
     setDialog(null);
   };
 
-  const commitSeries = (prefix: string, start: number, digits: number) => {
+  const commitSeries = async (prefix: string, start: number, digits: number) => {
     if (!dialog || dialog.kind !== "series") return;
     const ids = dialog.ids;
-    setLibrary((items) =>
-      items.map((p) => {
-        const index = ids.indexOf(p.id);
-        if (index < 0) return p;
-        return { ...p, name: `${prefix} ${String(start + index).padStart(digits, "0")}.jpg` };
-      })
-    );
+    if (desktopMode) {
+      const ordered = visiblePhotos.filter((p) => ids.includes(p.id));
+      let done = 0;
+      for (let index = 0; index < ordered.length; index += 1) {
+        const photo = ordered[index];
+        if (!photo.path) continue;
+        const dot = photo.name.lastIndexOf(".");
+        const ext = dot >= 0 ? photo.name.slice(dot) : "";
+        try {
+          await desktop().rename(photo.path, `${prefix} ${String(start + index).padStart(digits, "0")}${ext}`);
+          done += 1;
+        } catch (error) {
+          notify(`"${photo.name}": ${error instanceof Error ? error.message : String(error)}`, "Rename Series");
+          break;
+        }
+      }
+      notify(`Renamed ${done} file${done === 1 ? "" : "s"} as a series.`, "Rename Series");
+      setDialog(null);
+      void loadDir(currentFolderId);
+      return;
+    }
+    setPhotoCache((prev) => {
+      const next: Record<string, Photo[]> = {};
+      for (const [folderId, photos] of Object.entries(prev)) {
+        next[folderId] = photos.map((p) => {
+          const index = ids.indexOf(p.id);
+          if (index < 0) return p;
+          return { ...p, name: `${prefix} ${String(start + index).padStart(digits, "0")}.jpg` };
+        });
+      }
+      return next;
+    });
     notify(`Renamed ${ids.length} files as a series.`, "Rename Series");
     setDialog(null);
   };
@@ -351,8 +818,9 @@ export default function App() {
   const commitFind = (value: string) => {
     setQuery(value.trim());
     setDialog(null);
+    const needle = value.trim().toLowerCase();
     const matches = directPhotos.filter(
-      (p) => p.name.toLowerCase().includes(value.trim().toLowerCase()) || p.format.toLowerCase().includes(value.trim().toLowerCase())
+      (p) => p.name.toLowerCase().includes(needle) || p.format.toLowerCase().includes(needle)
     );
     if (value.trim()) notify(`${matches.length} matching image${matches.length === 1 ? "" : "s"} found.`, "Find: " + value.trim());
     if (matches[0]) {
@@ -361,40 +829,106 @@ export default function App() {
     }
   };
 
-  const commitPrint = (printer: string, copies: number) => {
-    notify(`Sent ${dialog?.kind === "print" ? dialog.ids.length : 0} image(s) to ${printer} (${copies} copies).`, "Print");
+  const commitPrint = async (printer: string, copies: number) => {
+    const count = dialog?.kind === "print" ? dialog.ids.length : 0;
+    if (desktopMode && dialog?.kind === "print") {
+      const first = libraryFlat.find((p) => p.id === dialog.ids[0]);
+      if (first?.path) {
+        await desktop().printImage(first.path);
+        notify(`Sent ${count} image(s) to ${printer} (${copies} ${copies === 1 ? "copy" : "copies"}).`, "Print");
+        setDialog(null);
+        return;
+      }
+    }
+    notify(`Sent ${count} image(s) to ${printer} (${copies} ${copies === 1 ? "copy" : "copies"}).`, "Print");
     setDialog(null);
   };
 
-  const paste = () => {
+  const paste = async () => {
     if (!clipboard) {
       notify("The clipboard is empty.", "Paste");
       return;
     }
+    if (desktopMode) {
+      if (!folder.path) {
+        notify("Open a real folder before pasting.", "Paste");
+        return;
+      }
+      const paths = libraryFlat.filter((p) => clipboard.ids.includes(p.id)).map((p) => p.path).filter(Boolean);
+      try {
+        if (clipboard.mode === "cut") {
+          await desktop().moveTo(paths, folder.path);
+          notify(`Moved ${paths.length} file${paths.length === 1 ? "" : "s"} to "${folder.name}".`, "Paste");
+          setClipboard(null);
+        } else {
+          await desktop().copyTo(paths, folder.path);
+          notify(`${paths.length} file${paths.length === 1 ? "" : "s"} pasted into "${folder.name}".`, "Paste");
+        }
+      } catch (error) {
+        notify(error instanceof Error ? error.message : String(error), "Paste");
+      }
+      void loadDir(currentFolderId);
+      return;
+    }
     if (clipboard.mode === "cut") {
-      setLibrary((items) => items.map((p) => (clipboard.ids.includes(p.id) ? { ...p, folderId: currentFolderId } : p)));
+      const ids = clipboard.ids;
+      setPhotoCache((prev) => {
+        const flat = Object.values(prev).flat();
+        const next: Record<string, Photo[]> = {};
+        for (const [folderId, photos] of Object.entries(prev)) {
+          next[folderId] = photos.filter((p) => !ids.includes(p.id));
+        }
+        const moved = flat.filter((p) => ids.includes(p.id)).map((p) => ({ ...p, folderId: currentFolderId }));
+        next[currentFolderId] = [...(next[currentFolderId] ?? []), ...moved];
+        return next;
+      });
       notify(`Moved ${clipboard.ids.length} file${clipboard.ids.length === 1 ? "" : "s"} to "${folder.name}".`, "Paste");
       setClipboard(null);
     } else {
       const stamp = Date.now();
-      const copies = library
-        .filter((p) => clipboard.ids.includes(p.id))
-        .map((p, index) => ({ ...p, id: `${p.id}-paste-${stamp}-${index}`, folderId: currentFolderId }));
-      setLibrary((items) => [...items, ...copies]);
-      notify(`${copies.length} file${copies.length === 1 ? "" : "s"} pasted into "${folder.name}".`, "Paste");
+      setPhotoCache((prev) => {
+        const flat = Object.values(prev).flat();
+        const copies = flat
+          .filter((p) => clipboard.ids.includes(p.id))
+          .map((p, index) => ({ ...p, id: `${p.id}-paste-${stamp}-${index}`, folderId: currentFolderId }));
+        return { ...prev, [currentFolderId]: [...(prev[currentFolderId] ?? []), ...copies] };
+      });
+      notify(`${clipboard.ids.length} file${clipboard.ids.length === 1 ? "" : "s"} pasted into "${folder.name}".`, "Paste");
     }
   };
 
   const showFileList = () => {
     const items = selectedPhotos.length ? selectedPhotos : visiblePhotos;
     const text = items
-      .map(
-        (p) =>
-          `${p.name}\t${p.width}x${p.height}\t${formatBytes(p.size)}\t${folderPathString(p.folderId)}`
-      )
+      .map((p) => `${p.name}\t${p.width}x${p.height}\t${formatBytes(p.size)}\t${folderPathString(p.folderId)}`)
       .join("\n");
     setDialog({ kind: "filelist", text });
   };
+
+  const toggleMaximize = async () => {
+    if (!desktopMode) {
+      notify("Window controls need the desktop app.", "ACDSee Classic");
+      return;
+    }
+    desktop().window.toggleMaximize();
+    window.setTimeout(async () => {
+      try {
+        setZoomed(await desktop().window.isMaximized());
+      } catch {
+        // Ignore.
+      }
+    }, 120);
+  };
+
+  const homeId = useMemo(() => {
+    const pictures = folders.find((f) => f.icon === "pictures");
+    if (pictures) return pictures.id;
+    if (sysPaths) {
+      const match = folders.find((f) => f.path === sysPaths.pictures || f.path === sysPaths.home);
+      if (match) return match.id;
+    }
+    return folders.find((f) => f.path)?.id ?? folders[0]?.id ?? "";
+  }, [folders, sysPaths]);
 
   const handleCommand = (action: string) => {
     switch (action) {
@@ -408,18 +942,22 @@ export default function App() {
         goUp();
         return;
       case "home":
-        navigateTo("my-pictures");
+        if (homeId) navigateTo(homeId);
         return;
       case "refresh":
-        refresh();
+        void refresh();
         return;
       case "open":
       case "view":
         if (selectedPhotos[0]) openPhoto(selectedPhotos[0].id);
-        else notify("Select an image to open.", "ACDSee");
+        else notify("Select an image to open.", "ACDSee Classic");
         return;
       case "open-with":
-        notify("Choose a program to open this image. ACDSee is the default image viewer.", "Open With");
+        if (desktopMode && primary?.path) void desktop().openPath(primary.path);
+        else notify("Choose a program to open this image. ACDSee is the default image viewer.", "Open With");
+        return;
+      case "show-in-folder":
+        if (desktopMode && primary?.path) void desktop().showInFolder(primary.path);
         return;
       case "slideshow":
         startSlideshow();
@@ -466,7 +1004,13 @@ export default function App() {
         return;
       case "flip":
         if (!selectedIds.length) return notify("Select an image to flip.", "Flip");
-        setLibrary((items) => items.map((p) => (selectedIds.includes(p.id) ? { ...p, flipped: !p.flipped } : p)));
+        setPhotoCache((prev) => {
+          const next: Record<string, Photo[]> = {};
+          for (const [folderId, photos] of Object.entries(prev)) {
+            next[folderId] = photos.map((p) => (selectedIds.includes(p.id) ? { ...p, flipped: !p.flipped } : p));
+          }
+          return next;
+        });
         notify(`Flipped ${selectedIds.length} image${selectedIds.length === 1 ? "" : "s"} horizontally.`, "Flip Horizontal");
         return;
       case "toggle-extensions":
@@ -477,15 +1021,7 @@ export default function App() {
         setDialog({ kind: "resize", id: selectedPhotos[0].id, width: selectedPhotos[0].width, height: selectedPhotos[0].height });
         return;
       case "set-wallpaper":
-        setAsWallpaper(primary);
-        return;
-      case "wallpaper-toggle":
-        if (wallpaper) {
-          setWallpaper(null);
-          notify("The default desktop has been restored.", "Display Properties");
-        } else {
-          setAsWallpaper(primary);
-        }
+        void setAsWallpaper(primary);
         return;
       case "properties":
         openProperties();
@@ -501,7 +1037,7 @@ export default function App() {
         notify(`${selectedIds.length} file${selectedIds.length === 1 ? "" : "s"} ready to move.`, "Cut");
         return;
       case "paste":
-        paste();
+        void paste();
         return;
       case "clear":
         setSelectedIds([]);
@@ -564,14 +1100,15 @@ export default function App() {
         setPrefs((prev) => ({ ...prev, showThumbs: !prev.showThumbs }));
         return;
       case "app-fullscreen":
-        setWindowState((state) => (state === "maximized" ? "normal" : "maximized"));
+        void toggleMaximize();
         return;
       case "minimize":
-        setWindowState("minimized");
+        if (desktopMode) desktop().window.minimize();
+        else notify("Window controls need the desktop app.", "ACDSee Classic");
         return;
       case "exit":
-        setWindowState("closed");
-        notify("ACDSee has exited. Double-click the ACDSee desktop icon to reopen.", "ACDSee 3.1");
+        if (desktopMode) desktop().window.close();
+        else notify("This demo runs in a browser tab — just close the tab.", "ACDSee Classic");
         return;
       case "options":
         setDialog({ kind: "options" });
@@ -585,11 +1122,8 @@ export default function App() {
       case "generate-filelist":
         showFileList();
         return;
-      case "feedback":
-        notify("This feature is part of the ACDSee kitchen-sink demo.", "ACDSee");
-        return;
       default:
-        notify("That command is not available in this demo.", "ACDSee");
+        notify("That command is not available.", "ACDSee Classic");
     }
   };
 
@@ -614,10 +1148,10 @@ export default function App() {
         openProperties();
       } else if (event.key === "F5") {
         event.preventDefault();
-        refresh();
+        void refresh();
       } else if (event.key === "F11") {
         event.preventDefault();
-        setWindowState((state) => (state === "maximized" ? "normal" : "maximized"));
+        void toggleMaximize();
       } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") {
         event.preventDefault();
         handleCommand("copy");
@@ -680,8 +1214,8 @@ export default function App() {
         { separator: true },
         { label: "Properties", shortcut: "Alt+Enter", action: "properties", disabled: !hasSelection },
         { separator: true },
-        { label: "Exit", shortcut: "Alt+F4", action: "exit" },
-      ],
+        { label: "Exit", shortcut: "Alt+F4", action: "exit" }
+      ]
     },
     {
       label: "Edit",
@@ -695,8 +1229,8 @@ export default function App() {
         { label: "Select All", shortcut: "Ctrl+A", action: "select-all", disabled: !visiblePhotos.length },
         { label: "Invert Selection", action: "invert-selection", disabled: !visiblePhotos.length },
         { separator: true },
-        { label: "Find...", shortcut: "Ctrl+F", action: "find" },
-      ],
+        { label: "Find...", shortcut: "Ctrl+F", action: "find" }
+      ]
     },
     {
       label: "View",
@@ -716,8 +1250,8 @@ export default function App() {
           submenu: [
             { label: "Small", checked: thumbSize === "small", action: "size-small" },
             { label: "Medium", checked: thumbSize === "medium", action: "size-medium" },
-            { label: "Large", checked: thumbSize === "large", action: "size-large" },
-          ],
+            { label: "Large", checked: thumbSize === "large", action: "size-large" }
+          ]
         },
         { label: "Show Thumbnails", checked: prefs.showThumbs, action: "toggle-thumbs" },
         { label: "Show File Extensions", checked: prefs.showExtensions, action: "toggle-extensions" },
@@ -729,13 +1263,13 @@ export default function App() {
             { label: "File Size", checked: sortKey === "size", action: "sort-size" },
             { label: "File Type", checked: sortKey === "type", action: "sort-type" },
             { separator: true },
-            { label: "Ascending", checked: sortDir === "asc", action: "sort-dir" },
-          ],
+            { label: "Ascending", checked: sortDir === "asc", action: "sort-dir" }
+          ]
         },
         { separator: true },
-        { label: "Full Screen", shortcut: "F11", checked: windowState === "maximized", action: "app-fullscreen" },
-        { label: "Refresh", shortcut: "F5", action: "refresh" },
-      ],
+        { label: "Zoom", shortcut: "F11", checked: zoomed, action: "app-fullscreen" },
+        { label: "Refresh", shortcut: "F5", action: "refresh" }
+      ]
     },
     {
       label: "Tools",
@@ -747,10 +1281,9 @@ export default function App() {
         { label: "Generate File List...", action: "generate-filelist", disabled: !visiblePhotos.length },
         { separator: true },
         { label: "Set as Wallpaper", action: "set-wallpaper", disabled: !hasSelection },
-        { label: "Restore Desktop", action: "wallpaper-toggle", disabled: !wallpaper },
         { separator: true },
-        { label: "Options...", action: "options" },
-      ],
+        { label: "Options...", action: "options" }
+      ]
     },
     {
       label: "Browser",
@@ -765,8 +1298,8 @@ export default function App() {
         { label: "Folders Pane", checked: showTree, action: "toggle-tree" },
         { label: "Preview Pane", checked: showInspector, action: "toggle-preview" },
         { label: "Switch to Thumbnails", checked: viewMode === "thumbnails", action: "view-thumbnails" },
-        { label: "Switch to Details", checked: viewMode === "details", action: "view-details" },
-      ],
+        { label: "Switch to Details", checked: viewMode === "details", action: "view-details" }
+      ]
     },
     {
       label: "Image",
@@ -780,8 +1313,8 @@ export default function App() {
         { label: "Resize...", action: "image-resize", disabled: !hasSelection },
         { label: "Convert...", action: "convert", disabled: !hasSelection },
         { separator: true },
-        { label: "Set as Wallpaper", action: "set-wallpaper", disabled: !hasSelection },
-      ],
+        { label: "Set as Wallpaper", action: "set-wallpaper", disabled: !hasSelection }
+      ]
     },
     {
       label: "Help",
@@ -790,26 +1323,26 @@ export default function App() {
         { label: "ACDSee Help Topics", shortcut: "F1", action: "help" },
         { label: "Keyboard Shortcuts", action: "help" },
         { separator: true },
-        { label: "About ACDSee...", action: "about" },
-      ],
-    },
+        { label: "About ACDSee...", action: "about" }
+      ]
+    }
   ];
 
   const toolbarGroups: { icon: string; title: string; action: string; disabled?: boolean }[][] = [
     [
       { icon: "open", title: "Open image", action: "open", disabled: !hasSelection },
-      { icon: "browse", title: "Browse folders", action: "browse" },
+      { icon: "browse", title: "Browse folders", action: "browse" }
     ],
     [
       { icon: "back", title: "Back", action: "back", disabled: !canBack },
       { icon: "forward", title: "Forward", action: "forward", disabled: !canForward },
       { icon: "up", title: "Up one level", action: "up" },
       { icon: "refresh", title: "Refresh", action: "refresh" },
-      { icon: "home", title: "Home", action: "home" },
+      { icon: "home", title: "Home", action: "home" }
     ],
     [
       { icon: "view", title: "View image", action: "open", disabled: !hasSelection },
-      { icon: "slideshow", title: "Slide show", action: "slideshow", disabled: !visiblePhotos.length },
+      { icon: "slideshow", title: "Slide show", action: "slideshow", disabled: !visiblePhotos.length }
     ],
     [
       { icon: "rotate-left", title: "Rotate left", action: "rotate-left", disabled: !hasSelection },
@@ -819,17 +1352,17 @@ export default function App() {
       { icon: "delete", title: "Delete", action: "delete", disabled: !hasSelection },
       { icon: "rename", title: "Rename", action: "rename", disabled: selectedPhotos.length !== 1 },
       { icon: "convert", title: "Convert", action: "convert", disabled: !hasSelection },
-      { icon: "print", title: "Print", action: "print", disabled: !visiblePhotos.length },
+      { icon: "print", title: "Print", action: "print", disabled: !visiblePhotos.length }
     ],
     [
       { icon: "find", title: "Find files", action: "find" },
       { icon: "wallpaper", title: "Set as wallpaper", action: "set-wallpaper", disabled: !hasSelection },
       { icon: "options", title: "Options", action: "options" },
-      { icon: "help", title: "Help", action: "help" },
-    ],
+      { icon: "help", title: "Help", action: "help" }
+    ]
   ];
 
-  const contextItems = [
+  const contextItems: ({ label: string; action: string; shortcut?: string } | { separator: boolean })[] = [
     { label: "Open", action: "open", shortcut: "Enter" },
     { label: "View", action: "view" },
     { separator: true },
@@ -845,48 +1378,81 @@ export default function App() {
     { label: "Rename...", action: "rename", shortcut: "F2" },
     { label: "Delete...", action: "delete", shortcut: "Del" },
     { separator: true },
+    ...(desktopMode ? [{ label: "Show in Folder", action: "show-in-folder" }] : []),
     { label: "Set as Wallpaper", action: "set-wallpaper" },
-    { label: "Properties", action: "properties", shortcut: "Alt+Enter" },
+    { label: "Properties", action: "properties", shortcut: "Alt+Enter" }
   ];
 
-  const restoreWindow = () => setWindowState((state) => (state === "closed" || state === "minimized" ? "normal" : state));
+  const lookInOptions = useMemo(() => {
+    const chain = folderPath(currentFolderId);
+    const roots = folders.filter((f) => f.parent === null);
+    const seen = new Set<string>();
+    const options: Folder[] = [];
+    for (const item of [...roots, ...chain]) {
+      if (seen.has(item.id)) continue;
+      seen.add(item.id);
+      options.push(item);
+    }
+    return options;
+  }, [folders, currentFolderId]);
+
+  const transferDestinations = useMemo(() => {
+    const chain = folderPath(currentFolderId);
+    const roots = folders.filter((f) => f.parent === null);
+    const seen = new Set<string>();
+    const options: Folder[] = [];
+    const ordered = [folder, ...chain, ...roots, ...children];
+    for (const item of ordered) {
+      if (!item || !item.path || seen.has(item.id)) continue;
+      seen.add(item.id);
+      options.push(item);
+    }
+    return options;
+  }, [folders, children, currentFolderId, folder]);
+
+  const picturesId = useMemo(
+    () => folders.find((f) => f.icon === "pictures")?.id ?? homeId,
+    [folders, homeId]
+  );
+
+  if (!ready) {
+    return (
+      <div className="app-window app-root boot-screen">
+        <div className="dialog-window boot-box" role="status">
+          <div className="titlebar dialog-titlebar">
+            <div className="titlebar-left">
+              <BrandIcon size={15} />
+              <span className="titlebar-text">ACDSee Classic</span>
+            </div>
+          </div>
+          <div className="dialog-content boot-content">
+            <BrandIcon size={54} />
+            <strong>ACDSee Classic</strong>
+            <span>{desktopMode ? "Reading your folders..." : "Loading the demo library..."}</span>
+            <div className="boot-bar">
+              <span />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
-      <Shell
-        wallpaper={wallpaper}
-        windowState={windowState}
-        taskCaption={`ACDSee 3.1 - ${folder.name}`}
-        onRestore={restoreWindow}
-        onMinimize={() => setWindowState("minimized")}
-        onOpenFolder={(id) => {
-          navigateTo(id);
-          setWindowState((state) => (state === "closed" || state === "minimized" ? "normal" : state));
-        }}
-        onNotify={notify}
-        onAbout={() => setDialog({ kind: "about" })}
-        onFind={() => setDialog({ kind: "find", initial: query })}
-        onShutdown={() => notify("It is now safe to turn off your computer. (This is a demo — your desktop is fine.)", "Shut Down Windows")}
-        onOpenViewer={() => handleCommand("open")}
-        onToggleWallpaper={() => handleCommand("wallpaper-toggle")}
-      >
-        <div className="titlebar main-titlebar" onDoubleClick={() => setWindowState((s) => (s === "maximized" ? "normal" : "maximized"))}>
+      <div className="app-window app-root">
+        <div className="titlebar main-titlebar" onDoubleClick={() => void toggleMaximize()}>
           <div className="titlebar-left">
             <BrandIcon size={16} />
-            <span className="titlebar-text">ACDSee 3.1 - {folder.name}</span>
-            <span className="titlebar-demo">DEMO</span>
+            <span className="titlebar-text">ACDSee Classic - {folder.name}</span>
+            {!desktopMode && <span className="titlebar-demo">WEB DEMO</span>}
           </div>
           <div className="window-controls">
-            <button type="button" className="wc-button" title="Minimize" onClick={() => setWindowState("minimized")}>
+            <button type="button" className="wc-button" title="Minimize" onClick={() => handleCommand("minimize")}>
               <span className="wc-min" />
             </button>
-            <button
-              type="button"
-              className="wc-button"
-              title={windowState === "maximized" ? "Restore Down" : "Maximize"}
-              onClick={() => setWindowState((state) => (state === "maximized" ? "normal" : "maximized"))}
-            >
-              <span className={windowState === "maximized" ? "wc-restore" : "wc-max"} />
+            <button type="button" className="wc-button" title={zoomed ? "Restore Down" : "Maximize"} onClick={() => void toggleMaximize()}>
+              <span className={zoomed ? "wc-restore" : "wc-max"} />
             </button>
             <button type="button" className="wc-button close" title="Close" onClick={() => handleCommand("exit")}>
               <span className="wc-x">×</span>
@@ -936,9 +1502,9 @@ export default function App() {
                   onChange={(event) => navigateTo(event.target.value)}
                   title="Navigate to folder"
                 >
-                  {(["my-computer", "c-drive", "my-documents", "my-pictures", "vacation-2001", "family-friends", "wallpapers", "scanned-photos", "sample-images", "recycle-bin", "my-network"] as const).map((id) => (
-                    <option value={id} key={id} title={folderPathString(id)}>
-                      {folderById(id)?.name}
+                  {lookInOptions.map((option) => (
+                    <option value={option.id} key={option.id} title={folderPathString(option.id)}>
+                      {option.name}
                     </option>
                   ))}
                 </select>
@@ -1022,7 +1588,7 @@ export default function App() {
             {visiblePhotos.length} image{visiblePhotos.length === 1 ? "" : "s"}
             {children.length ? ` · ${children.length} folder${children.length === 1 ? "" : "s"}` : ""}
           </span>
-          <button type="button" className="refresh-mini" title="Refresh folder (F5)" onClick={refresh}>
+          <button type="button" className="refresh-mini" title="Refresh folder (F5)" onClick={() => void refresh()}>
             <ToolIcon name="refresh" size={15} />
           </button>
         </div>
@@ -1033,20 +1599,23 @@ export default function App() {
               <div className="side-column" style={{ width: treeWidth }}>
                 <TreePane
                   folders={folders}
-                  photos={library}
+                  photos={libraryFlat}
                   currentId={currentFolderId}
                   expanded={expanded}
                   onSelect={navigateTo}
-                  onToggle={(id) =>
+                  onToggle={(id) => {
                     setExpanded((prev) => {
                       const next = new Set(prev);
                       if (next.has(id)) next.delete(id);
-                      else next.add(id);
+                      else {
+                        next.add(id);
+                        void ensureChildren(id);
+                      }
                       return next;
-                    })
-                  }
+                    });
+                  }}
                   onExpandAll={() => setExpanded(new Set(folders.filter((f) => childFolders(f.id).length).map((f) => f.id)))}
-                  onCollapse={() => setExpanded(new Set(["my-computer"]))}
+                  onCollapse={() => setExpanded(new Set(folders.filter((f) => f.parent === null).map((f) => f.id)))}
                   onClose={() => setShowTree(false)}
                 />
               </div>
@@ -1062,7 +1631,7 @@ export default function App() {
                 <FolderGlyph icon={folder.icon} size={20} />
                 <div>
                   <strong>{folder.name}</strong>
-                  <span>{descendantPhotoCount(folder.id, library)} images in this branch</span>
+                  <span>{descendantPhotoCount(folder.id, libraryFlat)} images in this branch</span>
                 </div>
               </div>
               <div className="center-heading-actions">
@@ -1106,7 +1675,7 @@ export default function App() {
                   photo={primary}
                   selectedCount={selectedPhotos.length}
                   onOpen={() => primary && openPhoto(primary.id)}
-                  onWallpaper={() => setAsWallpaper(primary)}
+                  onWallpaper={() => void setAsWallpaper(primary)}
                   onNext={() => {
                     if (!visiblePhotos.length || !primary) return;
                     const idx = visiblePhotos.findIndex((p) => p.id === primary.id);
@@ -1124,7 +1693,7 @@ export default function App() {
                   onClose={() => setShowInspector(false)}
                   onRate={(value) => {
                     if (!primary) return;
-                    setLibrary((items) => items.map((p) => (p.id === primary.id ? { ...p, rating: value } : p)));
+                    patchPhotoEverywhere(primary.id, (p) => ({ ...p, rating: value }));
                     notify(`Rated "${primary.name}" ${value} of 5 stars.`, "Rating");
                   }}
                 />
@@ -1141,7 +1710,7 @@ export default function App() {
             selectedPhotos={selectedPhotos}
             folderName={folder.name}
             filterActive={Boolean(normalizedQuery)}
-            wallpaperActive={Boolean(wallpaper)}
+            wallpaperActive={false}
           />
         )}
 
@@ -1153,7 +1722,7 @@ export default function App() {
             </div>
           </div>
         )}
-      </Shell>
+      </div>
 
       {viewerId && viewerPhotos.length > 0 && (
         <Viewer
@@ -1171,9 +1740,15 @@ export default function App() {
           onToggleSlideshow={() => setSlideshow((v) => !v)}
           onRotate={(id, delta) => rotate(id, delta)}
           onFlip={(id) => {
-            setLibrary((items) => items.map((p) => (p.id === id ? { ...p, flipped: !p.flipped } : p)));
+            setPhotoCache((prev) => {
+              const next: Record<string, Photo[]> = {};
+              for (const [folderId, photos] of Object.entries(prev)) {
+                next[folderId] = photos.map((p) => (p.id === id ? { ...p, flipped: !p.flipped } : p));
+              }
+              return next;
+            });
           }}
-          onWallpaper={(photo) => setAsWallpaper(photo)}
+          onWallpaper={(photo) => void setAsWallpaper(photo)}
           notify={notify}
         />
       )}
@@ -1181,17 +1756,18 @@ export default function App() {
       {dialog && (
         <DialogHost
           dialog={dialog}
-          photos={library}
-          folders={folders}
+          photos={libraryFlat}
+          folders={transferDestinations}
+          picturesId={picturesId}
           onClose={() => setDialog(null)}
-          onRename={commitRename}
-          onDelete={commitDelete}
-          onTransfer={commitTransfer}
-          onConvert={commitConvert}
+          onRename={(name) => void commitRename(name)}
+          onDelete={() => void commitDelete()}
+          onTransfer={(target, mode) => void commitTransfer(target, mode)}
+          onConvert={(format, quality, target) => void commitConvert(format, quality, target)}
           onFind={commitFind}
-          onResize={commitResize}
-          onSeries={commitSeries}
-          onPrint={commitPrint}
+          onResize={(width, height) => void commitResize(width, height)}
+          onSeries={(prefix, start, digits) => void commitSeries(prefix, start, digits)}
+          onPrint={(printer, copies) => void commitPrint(printer, copies)}
           onNotify={notify}
           onOpenViewer={(id) => {
             setDialog(null);
@@ -1199,7 +1775,7 @@ export default function App() {
           }}
           onSetWallpaper={(photo) => {
             setDialog(null);
-            setAsWallpaper(photo);
+            void setAsWallpaper(photo);
           }}
         />
       )}
@@ -1208,7 +1784,7 @@ export default function App() {
         <div className="context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onMouseDown={(event) => event.stopPropagation()}>
           <div className="context-header">
             <FileTypeIcon size={13} />
-            <span>{library.find((p) => p.id === contextMenu.id)?.name}</span>
+            <span>{libraryFlat.find((p) => p.id === contextMenu.id)?.name}</span>
           </div>
           {contextItems.map((item, index) =>
             "separator" in item && item.separator ? (
@@ -1216,16 +1792,16 @@ export default function App() {
             ) : (
               <button
                 type="button"
-                key={item.action}
+                key={"action" in item ? item.action : index}
                 className="menu-item"
                 onClick={() => {
                   setContextMenu(null);
-                  if (item.action) handleCommand(item.action);
+                  if ("action" in item && item.action) handleCommand(item.action);
                 }}
               >
                 <span className="menu-check" />
-                <span className="menu-label">{item.label}</span>
-                <span className="menu-shortcut">{item.shortcut ?? ""}</span>
+                <span className="menu-label">{"label" in item ? item.label : ""}</span>
+                <span className="menu-shortcut">{"shortcut" in item ? (item.shortcut ?? "") : ""}</span>
               </button>
             )
           )}

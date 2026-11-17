@@ -172,7 +172,7 @@ export function Inspector({
           <div className="preview-stage">
             {photo ? (
               <img
-                src={photo.src}
+                src={photo.fullSrc || photo.src}
                 alt={photo.name}
                 style={{ transform: imageTransform(photo) }}
                 draggable={false}
@@ -239,7 +239,7 @@ export function Inspector({
             <>
               <div className="info-head">
                 <div className="info-thumb">
-                  <img src={photo.src} alt="" style={{ transform: imageTransform(photo) }} />
+                  <img src={photo.fullSrc || photo.src} alt="" style={{ transform: imageTransform(photo) }} />
                 </div>
                 <div>
                   <strong>{photo.name}</strong>

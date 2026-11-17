@@ -47,7 +47,13 @@ function registerLocalFileProtocol(): void {
       if (url.host !== "file") return new Response("Not found", { status: 404 });
       const filePath = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
       if (!filePath) return new Response("Not found", { status: 404 });
-      return await net.fetch(pathToFileURL(filePath).href);
+      const upstream = await net.fetch(pathToFileURL(filePath).href);
+      // Re-emit with CORS headers so canvas convert/resize can read pixels.
+      const headers = new Headers();
+      const contentType = upstream.headers.get("content-type");
+      headers.set("content-type", contentType ?? "application/octet-stream");
+      headers.set("access-control-allow-origin", "*");
+      return new Response(await upstream.arrayBuffer(), { status: upstream.status, headers });
     } catch {
       return new Response("Not found", { status: 404 });
     }

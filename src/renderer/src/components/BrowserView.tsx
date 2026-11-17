@@ -34,7 +34,7 @@ type BrowserViewProps = {
 
 const typeLabel = (photo: Photo) => (photo.format === "JPEG" ? "JPG File" : `${photo.format} File`);
 const displayName = (name: string, showExtensions: boolean) =>
-  showExtensions ? name : name.replace(/\.(jpg|jpeg|png|bmp|tif|tiff)$/i, "");
+  showExtensions ? name : name.replace(/\.(jpg|jpeg|png|bmp|tif|tiff|gif|webp|avif|svg|heic|heif)$/i, "");
 
 export default function BrowserView({
   folder,
@@ -164,7 +164,7 @@ export default function BrowserView({
                 }}
               >
                 <div className="thumb-image-wrap">
-                  {showThumbs ? (
+                  {showThumbs && photo.src ? (
                     <img
                       src={photo.src}
                       alt={photo.name}
@@ -185,7 +185,8 @@ export default function BrowserView({
                     {displayName(photo.name, showExtensions)}
                   </span>
                   <span className="thumb-type">
-                    {photo.width}×{photo.height} · {formatBytes(photo.size)}
+                    {photo.width > 0 ? `${photo.width}×${photo.height} · ` : ""}
+                    {formatBytes(photo.size)}
                   </span>
                 </div>
               </div>
@@ -223,7 +224,7 @@ export default function BrowserView({
                   <FileTypeIcon type={photo.format} size={17} />
                 </span>
                 <span className="list-name">{photo.name}</span>
-                <span>{photo.size.toLocaleString()} KB</span>
+                <span>{Math.max(1, Math.round(photo.size / 1024)).toLocaleString()} KB</span>
                 <span>{typeLabel(photo)}</span>
                 <span>{formatDate(photo.date)}</span>
               </div>
@@ -266,9 +267,7 @@ export default function BrowserView({
                 <span>{Math.round(photo.size / 1024)} KB</span>
                 <span>{typeLabel(photo)}</span>
                 <span>{formatDate(photo.date)}</span>
-                <span>
-                  {photo.width} × {photo.height}
-                </span>
+                <span>{photo.width > 0 ? `${photo.width} × ${photo.height}` : "…"}</span>
               </div>
             ))}
           </div>

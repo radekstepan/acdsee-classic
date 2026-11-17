@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { folderPathString, formatBytes, formatDate, folderById, imageTransform, type Photo } from "../data";
+import { platformName } from "../lib/bridge";
+import { CONVERT_FORMATS } from "../lib/imaging";
 
 function shortLocation(folderId: string): string {
   const chain: string[] = [];
@@ -15,7 +17,7 @@ import { BrandIcon, FileTypeIcon, FolderGlyph } from "../icons";
 
 export type DialogState =
   | { kind: "rename"; ids: string[]; current: string }
-  | { kind: "delete"; ids: string[]; fromRecycle: boolean }
+  | { kind: "delete"; ids: string[]; names: string[]; trash: string; fromRecycle: boolean }
   | { kind: "transfer"; mode: "copy" | "move"; ids: string[] }
   | { kind: "convert"; ids: string[] }
   | { kind: "properties"; id: string }
@@ -32,6 +34,7 @@ type Props = {
   dialog: DialogState;
   photos: Photo[];
   folders: { id: string; name: string; parent: string | null }[];
+  picturesId: string;
   onClose: () => void;
   onRename: (name: string) => void;
   onDelete: () => void;
@@ -185,11 +188,12 @@ function RenameDialog({ ids, current, onConfirm, onClose }: { ids: string[]; cur
   );
 }
 
-function DeleteDialog({ count, fromRecycle, onConfirm, onClose }: { count: number; fromRecycle: boolean; onConfirm: () => void; onClose: () => void }) {
+function DeleteDialog({ names, trash, fromRecycle, onConfirm, onClose }: { names: string[]; trash: string; fromRecycle: boolean; onConfirm: () => void; onClose: () => void }) {
   const [confirm, setConfirm] = useState(true);
+  const count = names.length;
   return (
     <DialogShell
-      title={fromRecycle ? "Confirm File Delete" : "Confirm File Delete"}
+      title="Confirm File Delete"
       width={408}
       onClose={onClose}
       footer={
@@ -209,18 +213,18 @@ function DeleteDialog({ count, fromRecycle, onConfirm, onClose }: { count: numbe
           <p className="dialog-lead">
             {fromRecycle
               ? `Are you sure you want to permanently delete ${count === 1 ? "this file" : `these ${count} files`}?`
-              : `Are you sure you want to send ${count === 1 ? "this file" : `these ${count} files`} to the Recycle Bin?`}
+              : `Are you sure you want to send ${count === 1 ? "this file" : `these ${count} files`} to the ${trash}?`}
           </p>
           <ul className="delete-file-list">
-            {Array.from({ length: Math.min(count, 4) }, (_, i) => (
-              <li key={i}>
-                <FileTypeIcon size={13} /> {i === 3 && count > 4 ? `...and ${count - 3} more` : `Image ${i + 1}`}
+            {names.slice(0, 4).map((name, i) => (
+              <li key={`${name}-${i}`}>
+                <FileTypeIcon size={13} /> {i === 3 && count > 4 ? `...and ${count - 3} more` : name}
               </li>
             ))}
           </ul>
           {!fromRecycle && (
             <label className="checkbox-row">
-              <input type="checkbox" checked={confirm} onChange={(event) => setConfirm(event.target.checked)} /> Use the Recycle Bin
+              <input type="checkbox" checked={confirm} onChange={(event) => setConfirm(event.target.checked)} /> Use the {trash}
             </label>
           )}
           {fromRecycle && <p className="dialog-hint small">This action cannot be undone.</p>}
@@ -243,24 +247,23 @@ function TransferDialog({
   onConfirm: (target: string, mode: "copy" | "move") => void;
   onClose: () => void;
 }) {
-  const [target, setTarget] = useState("family-friends");
-  const destinations = folders.filter((f) => ["vacation-2001", "family-friends", "wallpapers", "scanned-photos", "sample-images", "my-pictures", "my-documents", "recycle-bin"].includes(f.id));
+  const [target, setTarget] = useState(folders[0]?.id ?? "");
   const verb = mode === "copy" ? "Copy" : "Move";
   return (
     <DialogShell
       title={`${verb} ${count === 1 ? "File" : `${count} Files`} to Folder`}
       width={416}
       onClose={onClose}
-      footer={<OkCancel okLabel={verb} onOk={() => onConfirm(target, mode)} onClose={onClose} />}
+      footer={<OkCancel okLabel={verb} onOk={() => target && onConfirm(target, mode)} onClose={onClose} okDisabled={!target} />}
     >
       <p className="dialog-lead">{verb} the selected image{count === 1 ? "" : "s"} to the folder selected below:</p>
-      <FolderSelect value={target} onChange={setTarget} folders={destinations} />
-      <p className="dialog-hint">New folder... is unavailable in this demo.</p>
+      <FolderSelect value={target} onChange={setTarget} folders={folders} />
+      <p className="dialog-hint">Name clashes are renamed automatically with a (2) suffix.</p>
     </DialogShell>
   );
 }
 
-function ConvertDialog({ count, onConfirm, onClose }: { count: number; onConfirm: (format: string, quality: number, folder: string) => void; onClose: () => void }) {
+function ConvertDialog({ count, picturesId, onConfirm, onClose }: { count: number; picturesId: string; onConfirm: (format: string, quality: number, folder: string) => void; onClose: () => void }) {
   const [format, setFormat] = useState("JPEG");
   const [quality, setQuality] = useState(85);
   const [folder, setFolder] = useState("same-folder");
@@ -274,11 +277,11 @@ function ConvertDialog({ count, onConfirm, onClose }: { count: number; onConfirm
       <div className="group-box">
         <div className="group-title">Output format</div>
         <div className="format-grid">
-          {["JPEG", "TIFF", "PNG", "BMP"].map((f) => (
-            <label className={`format-option ${format === f ? "active" : ""}`} key={f}>
-              <input type="radio" name="format" checked={format === f} onChange={() => setFormat(f)} />
-              <FileTypeIcon type={f} size={18} />
-              <span>{f === "JPEG" ? "JPEG (JPG)" : `${f} Image`}</span>
+          {CONVERT_FORMATS.map((f) => (
+            <label className={`format-option ${format === f.id ? "active" : ""}`} key={f.id}>
+              <input type="radio" name="format" checked={format === f.id} onChange={() => setFormat(f.id)} />
+              <FileTypeIcon type={f.id} size={18} />
+              <span>{f.label}</span>
             </label>
           ))}
         </div>
@@ -304,7 +307,7 @@ function ConvertDialog({ count, onConfirm, onClose }: { count: number; onConfirm
             <input type="radio" name="output" checked={folder === "same-folder"} onChange={() => setFolder("same-folder")} /> Current folder
           </label>
           <label className="radio-row">
-            <input type="radio" name="output" checked={folder === "sample-images"} onChange={() => setFolder("sample-images")} /> Sample Images
+            <input type="radio" name="output" checked={folder === picturesId} onChange={() => setFolder(picturesId)} /> My Pictures
           </label>
           <label className="checkbox-row">
             <input type="checkbox" /> Replace originals
@@ -407,7 +410,7 @@ function PropertiesDialog({ photo, onClose, onOpen, onWallpaper }: { photo: Phot
       {tab === "general" && (
         <div className="prop-general">
           <div className="prop-preview">
-            <img src={photo.src} alt={photo.name} style={{ transform: imageTransform(photo) }} />
+            <img src={photo.fullSrc || photo.src} alt={photo.name} style={{ transform: imageTransform(photo) }} />
           </div>
           <div className="prop-fields">
             <div className="prop-file-name">
@@ -432,7 +435,7 @@ function PropertiesDialog({ photo, onClose, onOpen, onWallpaper }: { photo: Phot
       {tab === "image" && (
         <div className="prop-general">
           <div className="prop-preview">
-            <img src={photo.src} alt={photo.name} style={{ transform: imageTransform(photo) }} />
+            <img src={photo.fullSrc || photo.src} alt={photo.name} style={{ transform: imageTransform(photo) }} />
           </div>
           <dl className="property-list compact">
             <dt>Dimensions</dt>
@@ -472,7 +475,7 @@ function PropertiesDialog({ photo, onClose, onOpen, onWallpaper }: { photo: Phot
             <dt>Date taken</dt>
             <dd>{formatDate(photo.date)}</dd>
             <dt>Description</dt>
-            <dd>Demo image from the ACDSee sample library.</dd>
+            <dd title={photo.path || undefined}>{photo.path || "Demo image from the sample library."}</dd>
           </dl>
           <div className="prop-footer-actions">
             <button type="button" className="classic-button" onClick={onWallpaper}>
@@ -728,7 +731,7 @@ function OptionsDialog({ onClose, onNotify }: { onClose: () => void; onNotify: (
               <input type="checkbox" /> Show hidden folders
             </label>
             <h4>Cache</h4>
-            <p className="dialog-hint">Thumbnail cache: 2.4 MB</p>
+            <p className="dialog-hint">The thumbnail cache is managed automatically.</p>
             <button type="button" className="classic-button" onClick={() => onNotify("Thumbnail cache cleared.")}>
               Clear Cache
             </button>
@@ -756,7 +759,7 @@ function OptionsDialog({ onClose, onNotify }: { onClose: () => void; onNotify: (
           <label className="checkbox-row">
             <input type="checkbox" /> Use hardware acceleration
           </label>
-          <p className="dialog-hint">Slide show delay and looping are simulated in this demo.</p>
+          <p className="dialog-hint">The slide show advances every 3 seconds and loops.</p>
         </div>
       )}
       {tab === "types" && (
@@ -825,11 +828,11 @@ function AboutDialog({ onClose, onNotify }: { onClose: () => void; onNotify: (me
       <div className="about-layout">
         <BrandIcon size={74} />
         <div>
-          <div className="about-title">ACDSee 3.1</div>
+          <div className="about-title">ACDSee Classic</div>
           <div className="about-sub">Image Browser &amp; Viewer</div>
           <div className="about-meta">
-            Version 3.1 (Build 921)<br />
-            Copyright © 1993–2001 ACD Systems, Ltd.<br />
+            Version 0.1.0<br />
+            A fan-made, open-source classic clone.<br />
             All rights reserved.
           </div>
         </div>
@@ -837,19 +840,19 @@ function AboutDialog({ onClose, onNotify }: { onClose: () => void; onNotify: (me
       <div className="about-box">
         <div>
           <span>Licensed to:</span>
-          <strong>ACDSee Museum Visitor</strong>
+          <strong>Open source (MIT)</strong>
         </div>
         <div>
           <span>Operating system:</span>
-          <strong>Windows 98 SE</strong>
+          <strong>{platformName()}</strong>
         </div>
         <div>
-          <span>System resources:</span>
-          <strong>78% free</strong>
+          <span>Build:</span>
+          <strong>Desktop app</strong>
         </div>
       </div>
       <p className="dialog-hint disclaimer">
-        This is a fan-made, interactive recreation for demonstration purposes. ACDSee and ACD Systems are trademarks of their respective owners. All photos are stock demo images.
+        This is a fan-made, open-source recreation for demonstration purposes. ACDSee and ACD Systems are trademarks of their respective owners.
       </p>
     </DialogShell>
   );
@@ -876,18 +879,18 @@ function FeedbackDialog({ title, message, onClose }: { title: string; message: s
 }
 
 export default function DialogHost(props: Props) {
-  const { dialog, photos, folders, onClose, onRename, onDelete, onTransfer, onConvert, onFind, onResize, onSeries, onPrint, onNotify, onOpenViewer, onSetWallpaper } = props;
+  const { dialog, photos, folders, picturesId, onClose, onRename, onDelete, onTransfer, onConvert, onFind, onResize, onSeries, onPrint, onNotify, onOpenViewer, onSetWallpaper } = props;
   const selectedPhoto = dialog.kind === "properties" || dialog.kind === "resize" ? photos.find((p) => p.id === dialog.id) : undefined;
 
   switch (dialog.kind) {
     case "rename":
       return <RenameDialog ids={dialog.ids} current={dialog.current} onConfirm={onRename} onClose={onClose} />;
     case "delete":
-      return <DeleteDialog count={dialog.ids.length} fromRecycle={dialog.fromRecycle} onConfirm={onDelete} onClose={onClose} />;
+      return <DeleteDialog names={dialog.names} trash={dialog.trash} fromRecycle={dialog.fromRecycle} onConfirm={onDelete} onClose={onClose} />;
     case "transfer":
       return <TransferDialog mode={dialog.mode} count={dialog.ids.length} folders={folders} onConfirm={onTransfer} onClose={onClose} />;
     case "convert":
-      return <ConvertDialog count={dialog.ids.length} onConfirm={onConvert} onClose={onClose} />;
+      return <ConvertDialog count={dialog.ids.length} picturesId={picturesId} onConfirm={onConvert} onClose={onClose} />;
     case "properties":
       return selectedPhoto ? (
         <PropertiesDialog

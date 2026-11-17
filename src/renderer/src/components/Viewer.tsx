@@ -351,7 +351,7 @@ export default function Viewer({
           <div className="viewer-canvas">
             <img
               key={photo.id}
-              src={photo.src}
+              src={photo.fullSrc || photo.src}
               alt={photo.name}
               draggable={false}
               className={zoom === "fit" ? "fit" : ""}
