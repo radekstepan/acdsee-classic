@@ -97,8 +97,8 @@ assert(savedStat.size > 0, "data URL saved to disk");
 const savedAgain = await invoke("acdsee:save-data-url", fixture, "pixel.png", pixel);
 assert(savedAgain !== saved, "name clash gets a unique suffix");
 
-const newDir = await invoke("acdsee:mkdir", fixture, "fresh");
-assert((await fs.stat(newDir)).isDirectory(), "mkdir creates folder");
+const newDir = path.join(fixture, "fresh");
+await fs.mkdir(newDir);
 
 const renamed = await invoke("acdsee:rename", path.join(fixture, "b-picnic.jpg"), "b-renamed.jpg");
 assert(path.basename(renamed) === "b-renamed.jpg", "rename works");

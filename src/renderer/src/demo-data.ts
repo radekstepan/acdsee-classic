@@ -4,7 +4,7 @@ import type { Folder, Photo } from "./data";
 export const demoFolders: Folder[] = [
   { id: "my-computer", name: "My Computer", icon: "computer", parent: null, path: "" },
   { id: "a-floppy", name: "3½ Floppy (A:)", icon: "floppy", parent: "my-computer", path: "" },
-  { id: "c-drive", name: "Local Disk (C:)", icon: "drive", parent: "my-computer", hint: "4.00 GB", path: "" },
+  { id: "c-drive", name: "Local Disk (C:)", icon: "drive", parent: "my-computer", path: "" },
   { id: "program-files", name: "Program Files", icon: "programs", parent: "c-drive", path: "" },
   { id: "acd-systems", name: "ACD Systems", icon: "folder", parent: "program-files", path: "" },
   { id: "internet-explorer", name: "Internet Explorer", icon: "folder", parent: "program-files", path: "" },
@@ -19,7 +19,7 @@ export const demoFolders: Folder[] = [
   { id: "scanned-photos", name: "Scanned Photos", icon: "folder", parent: "my-pictures", path: "" },
   { id: "sample-images", name: "Sample Images", icon: "folder", parent: "my-pictures", path: "" },
   { id: "my-music", name: "My Music", icon: "music", parent: "my-documents", path: "" },
-  { id: "d-drive", name: "Compact Disc (D:)", icon: "cd", parent: "my-computer", hint: "ACDSee 3.1 CD", path: "" },
+  { id: "d-drive", name: "Compact Disc (D:)", icon: "cd", parent: "my-computer", path: "" },
   { id: "control-panel", name: "Control Panel", icon: "control", parent: "my-computer", path: "" },
   { id: "my-network", name: "My Network Places", icon: "network", parent: null, path: "" },
   { id: "recycle-bin", name: "Recycle Bin", icon: "recycle", parent: null, path: "" }

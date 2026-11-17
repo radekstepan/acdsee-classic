@@ -124,7 +124,6 @@ export default function BrowserView({
           <div className="empty-folder">
             <div className="empty-folder-art">
               <FolderGlyph icon={folder.icon} size={78} />
-              <div className="empty-sparkle">✦</div>
             </div>
             <strong>{query ? "No matching images" : "There are no items in this folder."}</strong>
             <span>
@@ -284,7 +283,6 @@ type StatusProps = {
   selectedPhotos: Photo[];
   folderName: string;
   filterActive: boolean;
-  wallpaperActive: boolean;
 };
 
 export function StatusBar({
@@ -294,7 +292,6 @@ export function StatusBar({
   selectedPhotos,
   folderName,
   filterActive,
-  wallpaperActive,
 }: StatusProps) {
   const one = selectedPhotos.length === 1 ? selectedPhotos[0] : null;
   const objectWord = count + folders === 1 ? "object" : "objects";
@@ -326,7 +323,7 @@ export function StatusBar({
         )}
       </div>
       <div className="status-pane status-space">
-        {filterActive ? "Filtered view" : wallpaperActive ? "Wallpaper active" : "4.00 GB free"}
+        {filterActive ? "Filtered view" : "Ready"}
       </div>
       <div className="status-pane status-brand">
         <BrandIcon size={12} />

@@ -22,14 +22,11 @@ export type FolderNode = {
   /** Absolute path, or "" for virtual nodes. */
   path: string;
   parent: string | null;
-  hint?: string;
 };
 
 export type DirEntry = {
   name: string;
   path: string;
-  isDirectory: boolean;
-  isImage: boolean;
   size: number;
   mtimeMs: number;
   ext: string;
@@ -56,7 +53,6 @@ export type ExifInfo = {
   iso?: number;
   focalLength?: string;
   flash?: string;
-  dateTaken?: string;
 };
 
 export type SystemPaths = {
@@ -95,7 +91,6 @@ export type AcdseeApi = {
   exif: (path: string) => Promise<ExifInfo | null>;
   /** Save a data URL to disk (used by Convert / Resize). */
   saveDataUrl: (targetDir: string, fileName: string, dataUrl: string) => Promise<string>;
-  mkdir: (parentDir: string, name: string) => Promise<string>;
   rename: (path: string, newName: string) => Promise<string>;
   trash: (paths: string[]) => Promise<void>;
   copyTo: (paths: string[], targetDir: string) => Promise<void>;

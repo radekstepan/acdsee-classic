@@ -402,16 +402,6 @@ export function ToolIcon({ name, size = 24, className }: IconProps & { name: str
             <path d="M12 25h8v3H12zM7 28h18v2H7z" fill="#696860" />
           </>
         );
-      case "paste":
-        return (
-          <>
-            <path d="M7 4h18v24H7z" fill="#9b7a38" />
-            <path d="M8 5h16v22H8z" fill="#e8ddb9" />
-            <path d="M12 3h8v4h-8z" fill="#77736a" />
-            <path d="M11 11h10v1H11zM11 14h10v1H11zM11 17h7v1h-7z" fill="#7f765b" />
-            <path d="M16 21l5-4v3h4v3h-4v3z" fill="#2a7b32" />
-          </>
-        );
       case "thumbnails":
         return (
           <>
@@ -454,8 +444,6 @@ export function ToolIcon({ name, size = 24, className }: IconProps & { name: str
       case "star":
       case "folder":
       case "info":
-      case "flip":
-      case "save":
         return <FallbackTool name={name} />;
       default:
         return <circle cx="16" cy="16" r="10" fill="#8a8a82" />;
@@ -563,22 +551,6 @@ function FallbackTool({ name }: { name: string }) {
           <circle cx="16" cy="9.5" r="2.2" fill="#fff" />
         </>
       );
-    case "flip":
-      return (
-        <>
-          <path d="M4 16h11V5zM17 5h11v11H17zM4 18h11v9H4zM17 18h11v9H17z" fill="#7e9cb2" />
-          <path d="M15 3v26" stroke="#333" strokeWidth="2" strokeDasharray="2 2" />
-        </>
-      );
-    case "save":
-      return (
-        <>
-          <path d="M4 4h23l1 1v23H4z" fill="#38628b" />
-          <path d="M7 5h15v9H7z" fill="#fff" />
-          <path d="M9 19h14v8H9z" fill="#d5e2ec" />
-          <path d="M10 21h12v1H10zM10 23h8v1h-8z" fill="#4f6f8a" />
-        </>
-      );
     default:
       return <circle cx="16" cy="16" r="10" fill="#8a8a82" />;
   }
@@ -597,13 +569,3 @@ export function FileTypeIcon({ type = "JPEG", size = 14 }: { type?: string; size
   );
 }
 
-export function StartFlag({ size = 18 }: IconProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M1 3l5-1v7H1z" fill="#f44336" />
-      <path d="M7 1.7L12 1v8H7z" fill="#4caf50" />
-      <path d="M1 10h5v7l-5-1z" fill="#2196f3" />
-      <path d="M7 10h5v8l-5-.7z" fill="#ffc107" />
-    </svg>
-  );
-}

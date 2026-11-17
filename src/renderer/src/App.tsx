@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import {
   childFolders,
-  descendantPhotoCount,
   folderById,
   folderPath,
   folderPathString,
@@ -111,7 +110,6 @@ export default function App() {
   foldersRef.current = folders;
   cacheRef.current = photoCache;
   thumbSizeRef.current = thumbSize;
-  const bodyRef = useRef<HTMLDivElement>(null);
 
   const notify = (message: string, title = "ACDSee Classic") =>
     setToast({ id: Date.now(), title, message });
@@ -314,7 +312,7 @@ export default function App() {
   }, []);
 
   const libraryFlat = useMemo(() => Object.values(photoCache).flat(), [photoCache]);
-  setRuntimeLibrary(folders, libraryFlat);
+  setRuntimeLibrary(folders);
 
   const folder: Folder = folderById(currentFolderId) ?? {
     id: currentFolderId || "unknown",
@@ -590,8 +588,7 @@ export default function App() {
       kind: "delete",
       ids: selectedIds,
       names: selectedPhotos.map((p) => p.name),
-      trash: trashLabel(),
-      fromRecycle: false
+      trash: trashLabel()
     });
   };
 
@@ -1138,14 +1135,26 @@ export default function App() {
       } else if (event.key === "F2") {
         event.preventDefault();
         handleCommand("rename");
-      } else if (event.key === "Enter" && selectedPhotos[0]) {
-        event.preventDefault();
-        openPhoto(selectedPhotos[0].id);
-      } else if (event.key === "Escape") {
-        setContextMenu(null);
       } else if (event.altKey && event.key === "Enter") {
         event.preventDefault();
         openProperties();
+      } else if (event.key === "Enter" && selectedPhotos[0]) {
+        event.preventDefault();
+        openPhoto(selectedPhotos[0].id);
+      } else if (event.altKey && event.key === "ArrowLeft") {
+        event.preventDefault();
+        goBack();
+      } else if (event.altKey && event.key === "ArrowRight") {
+        event.preventDefault();
+        goForward();
+      } else if (event.altKey && event.key === "ArrowUp") {
+        event.preventDefault();
+        goUp();
+      } else if (event.key === "Escape") {
+        setContextMenu(null);
+      } else if (event.key === "F1") {
+        event.preventDefault();
+        handleCommand("help");
       } else if (event.key === "F5") {
         event.preventDefault();
         void refresh();
@@ -1444,7 +1453,7 @@ export default function App() {
         <div className="titlebar main-titlebar" onDoubleClick={() => void toggleMaximize()}>
           <div className="titlebar-left">
             <BrandIcon size={16} />
-            <span className="titlebar-text">ACDSee Classic - {folder.name}</span>
+            <span className="titlebar-text">ACDSee Classic - {pathLabel}</span>
             {!desktopMode && <span className="titlebar-demo">WEB DEMO</span>}
           </div>
           <div className="window-controls">
@@ -1483,7 +1492,6 @@ export default function App() {
                 </div>
               ))}
               <div className="toolbar-spacer" />
-              <span className="toolbar-badge">Image Browser</span>
             </div>
 
             <div className="location-bar">
@@ -1593,7 +1601,7 @@ export default function App() {
           </button>
         </div>
 
-        <div className={`app-body ${refreshing ? "refreshing" : ""}`} ref={bodyRef}>
+        <div className={`app-body ${refreshing ? "refreshing" : ""}`}>
           {showTree && (
             <>
               <div className="side-column" style={{ width: treeWidth }}>
@@ -1631,7 +1639,7 @@ export default function App() {
                 <FolderGlyph icon={folder.icon} size={20} />
                 <div>
                   <strong>{folder.name}</strong>
-                  <span>{descendantPhotoCount(folder.id, libraryFlat)} images in this branch</span>
+                  <span title={pathLabel}>{pathLabel}</span>
                 </div>
               </div>
               <div className="center-heading-actions">
@@ -1710,14 +1718,15 @@ export default function App() {
             selectedPhotos={selectedPhotos}
             folderName={folder.name}
             filterActive={Boolean(normalizedQuery)}
-            wallpaperActive={false}
           />
         )}
 
         {refreshing && (
           <div className="refresh-overlay">
             <div className="refresh-box">
-              <div className="hourglass">⌛</div>
+              <div className="hourglass">
+                <ToolIcon name="refresh" size={20} />
+              </div>
               <span>Refreshing folder contents...</span>
             </div>
           </div>

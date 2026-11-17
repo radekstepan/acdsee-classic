@@ -100,12 +100,6 @@ export function TreePane({
       <div className="tree-scroll" role="tree" aria-label="Folder tree">
         {roots.map((folder) => row(folder, 0))}
       </div>
-      <div className="tree-footer">
-        <FolderGlyph icon="computer" size={14} />
-        <span>My Computer</span>
-        <span className="tree-footer-dot">·</span>
-        <span>4.00 GB free</span>
-      </div>
     </section>
   );
 }
@@ -132,10 +126,6 @@ export function Inspector({
   onRate,
 }: InspectorProps) {
   const [tab, setTab] = useState<"preview" | "info">("preview");
-  const hist = Array.from({ length: 44 }, (_, i) => {
-    const base = photo ? photo.id.charCodeAt(i % photo.id.length) : 60;
-    return Math.max(2, Math.abs(Math.sin((i + base) * 0.53) * 24 + Math.sin(i * 0.17) * 8));
-  });
 
   return (
     <section className="pane inspector-pane">
@@ -212,18 +202,6 @@ export function Inspector({
                 <button type="button" className="classic-button" onClick={onWallpaper}>
                   Set as Wallpaper
                 </button>
-              </div>
-              <div className="histogram-box">
-                <div className="histogram-head">
-                  <span>Luminance</span>
-                  <span>RGB</span>
-                </div>
-                <svg viewBox="0 0 176 40" preserveAspectRatio="none" className="histogram">
-                  <path d="M0 39h176" stroke="#777" strokeWidth="1" />
-                  {hist.map((h, i) => (
-                    <rect key={i} x={i * 4} y={38 - h} width={3} height={h} fill={i % 7 === 0 ? "#1b6a2a" : "#76766e"} />
-                  ))}
-                </svg>
               </div>
             </div>
           ) : (

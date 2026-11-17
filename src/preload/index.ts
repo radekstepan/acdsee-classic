@@ -13,8 +13,6 @@ const api: AcdseeApi = {
   exif: (path: string) => ipcRenderer.invoke("acdsee:exif", path),
   saveDataUrl: (targetDir: string, fileName: string, dataUrl: string) =>
     ipcRenderer.invoke("acdsee:save-data-url", targetDir, fileName, dataUrl),
-  mkdir: (parentDir: string, name: string) =>
-    ipcRenderer.invoke("acdsee:mkdir", parentDir, name),
   rename: (path: string, newName: string) =>
     ipcRenderer.invoke("acdsee:rename", path, newName),
   trash: (paths: string[]) => ipcRenderer.invoke("acdsee:trash", paths),

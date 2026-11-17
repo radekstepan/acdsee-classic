@@ -13,11 +13,11 @@ function shortLocation(folderId: string): string {
   }
   return chain.slice(-2).join(" \\ ");
 }
-import { BrandIcon, FileTypeIcon, FolderGlyph } from "../icons";
+import { BrandIcon, FileTypeIcon, FolderGlyph, ToolIcon } from "../icons";
 
 export type DialogState =
   | { kind: "rename"; ids: string[]; current: string }
-  | { kind: "delete"; ids: string[]; names: string[]; trash: string; fromRecycle: boolean }
+  | { kind: "delete"; ids: string[]; names: string[]; trash: string }
   | { kind: "transfer"; mode: "copy" | "move"; ids: string[] }
   | { kind: "convert"; ids: string[] }
   | { kind: "properties"; id: string }
@@ -27,8 +27,7 @@ export type DialogState =
   | { kind: "resize"; id: string; width: number; height: number }
   | { kind: "series"; ids: string[]; firstName: string }
   | { kind: "print"; ids: string[] }
-  | { kind: "filelist"; text: string }
-  | { kind: "feedback"; title: string; message: string };
+  | { kind: "filelist"; text: string };
 
 type Props = {
   dialog: DialogState;
@@ -119,12 +118,10 @@ function FolderSelect({
   value,
   onChange,
   folders,
-  disabledIds,
 }: {
   value: string;
   onChange: (id: string) => void;
   folders: { id: string; name: string; parent: string | null }[];
-  disabledIds?: string[];
 }) {
   return (
     <div className="folder-select-box">
@@ -136,7 +133,6 @@ function FolderSelect({
             type="button"
             className={`folder-select-row ${value === folder.id ? "selected" : ""}`}
             onClick={() => onChange(folder.id)}
-            disabled={disabledIds?.includes(folder.id)}
           >
             <FolderGlyph icon={folder.id === "recycle-bin" ? "recycle" : folder.id.includes("drive") ? "drive" : "folder"} size={15} />
             <span>{folder.name}</span>
@@ -188,7 +184,7 @@ function RenameDialog({ ids, current, onConfirm, onClose }: { ids: string[]; cur
   );
 }
 
-function DeleteDialog({ names, trash, fromRecycle, onConfirm, onClose }: { names: string[]; trash: string; fromRecycle: boolean; onConfirm: () => void; onClose: () => void }) {
+function DeleteDialog({ names, trash, onConfirm, onClose }: { names: string[]; trash: string; onConfirm: () => void; onClose: () => void }) {
   const [confirm, setConfirm] = useState(true);
   const count = names.length;
   return (
@@ -199,7 +195,7 @@ function DeleteDialog({ names, trash, fromRecycle, onConfirm, onClose }: { names
       footer={
         <>
           <button type="button" className="classic-button default" onClick={() => confirm && onConfirm()} disabled={!confirm}>
-            {fromRecycle ? "Delete" : "Yes"}
+            Yes
           </button>
           <button type="button" className="classic-button" onClick={onClose}>
             No
@@ -211,9 +207,7 @@ function DeleteDialog({ names, trash, fromRecycle, onConfirm, onClose }: { names
         <div className="warning-icon">!</div>
         <div>
           <p className="dialog-lead">
-            {fromRecycle
-              ? `Are you sure you want to permanently delete ${count === 1 ? "this file" : `these ${count} files`}?`
-              : `Are you sure you want to send ${count === 1 ? "this file" : `these ${count} files`} to the ${trash}?`}
+            {`Are you sure you want to send ${count === 1 ? "this file" : `these ${count} files`} to the ${trash}?`}
           </p>
           <ul className="delete-file-list">
             {names.slice(0, 4).map((name, i) => (
@@ -222,12 +216,9 @@ function DeleteDialog({ names, trash, fromRecycle, onConfirm, onClose }: { names
               </li>
             ))}
           </ul>
-          {!fromRecycle && (
-            <label className="checkbox-row">
-              <input type="checkbox" checked={confirm} onChange={(event) => setConfirm(event.target.checked)} /> Use the {trash}
-            </label>
-          )}
-          {fromRecycle && <p className="dialog-hint small">This action cannot be undone.</p>}
+          <label className="checkbox-row">
+            <input type="checkbox" checked={confirm} onChange={(event) => setConfirm(event.target.checked)} /> Use the {trash}
+          </label>
         </div>
       </div>
     </DialogShell>
@@ -339,7 +330,9 @@ function FindDialog({ initial, onFind, onClose }: { initial: string; onFind: (qu
       }
     >
       <div className="dialog-row">
-        <div className="dialog-icon-large find-large">🔍</div>
+        <div className="dialog-icon-large find-large">
+          <ToolIcon name="find" size={40} />
+        </div>
         <div className="dialog-copy">
           <label className="field-label" htmlFor="find-name">
             Named:
@@ -589,7 +582,9 @@ function PrintDialog({ count, onConfirm, onClose }: { count: number; onConfirm: 
       }
     >
       <div className="printer-banner">
-        <div className="printer-graphic">🖨</div>
+        <div className="printer-graphic">
+          <ToolIcon name="print" size={40} />
+        </div>
         <select className="classic-select grow" value={printer} onChange={(event) => setPrinter(event.target.value)}>
           <option>HP DeskJet 970Cse</option>
           <option>Epson Stylus Photo 890</option>
@@ -858,26 +853,6 @@ function AboutDialog({ onClose, onNotify }: { onClose: () => void; onNotify: (me
   );
 }
 
-function FeedbackDialog({ title, message, onClose }: { title: string; message: string; onClose: () => void }) {
-  return (
-    <DialogShell
-      title={title}
-      width={376}
-      onClose={onClose}
-      footer={
-        <button type="button" className="classic-button default" onClick={onClose}>
-          OK
-        </button>
-      }
-    >
-      <div className="confirm-layout">
-        <BrandIcon size={34} />
-        <p className="dialog-lead">{message}</p>
-      </div>
-    </DialogShell>
-  );
-}
-
 export default function DialogHost(props: Props) {
   const { dialog, photos, folders, picturesId, onClose, onRename, onDelete, onTransfer, onConvert, onFind, onResize, onSeries, onPrint, onNotify, onOpenViewer, onSetWallpaper } = props;
   const selectedPhoto = dialog.kind === "properties" || dialog.kind === "resize" ? photos.find((p) => p.id === dialog.id) : undefined;
@@ -886,7 +861,7 @@ export default function DialogHost(props: Props) {
     case "rename":
       return <RenameDialog ids={dialog.ids} current={dialog.current} onConfirm={onRename} onClose={onClose} />;
     case "delete":
-      return <DeleteDialog names={dialog.names} trash={dialog.trash} fromRecycle={dialog.fromRecycle} onConfirm={onDelete} onClose={onClose} />;
+      return <DeleteDialog names={dialog.names} trash={dialog.trash} onConfirm={onDelete} onClose={onClose} />;
     case "transfer":
       return <TransferDialog mode={dialog.mode} count={dialog.ids.length} folders={folders} onConfirm={onTransfer} onClose={onClose} />;
     case "convert":
@@ -916,8 +891,6 @@ export default function DialogHost(props: Props) {
       return <PrintDialog count={dialog.ids.length} onConfirm={onPrint} onClose={onClose} />;
     case "filelist":
       return <FileListDialog text={dialog.text} onClose={onClose} onNotify={onNotify} />;
-    case "feedback":
-      return <FeedbackDialog title={dialog.title} message={dialog.message} onClose={onClose} />;
     default:
       return null;
   }

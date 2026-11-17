@@ -76,8 +76,7 @@ async function listVolumes(): Promise<FolderNode[]> {
         name: letter === "A" || letter === "B" ? `${letter}: Floppy` : `Local Disk (${letter}:)`,
         icon: letter === "A" || letter === "B" ? "floppy" : "drive",
         path: root,
-        parent: VIRTUAL_ROOT,
-        hint: root
+        parent: VIRTUAL_ROOT
       });
     }
     return drives;
@@ -257,8 +256,6 @@ export function registerFsHandlers(getMainWindow: () => BrowserWindow | null): v
           folders.push({
             name: entry.name,
             path: full,
-            isDirectory: true,
-            isImage: false,
             size: 0,
             mtimeMs: st.mtimeMs,
             ext: ""
@@ -269,8 +266,6 @@ export function registerFsHandlers(getMainWindow: () => BrowserWindow | null): v
         files.push({
           name: entry.name,
           path: full,
-          isDirectory: false,
-          isImage: true,
           size: st.size,
           mtimeMs: st.mtimeMs,
           ext: path.extname(entry.name).toLowerCase()
@@ -314,7 +309,7 @@ export function registerFsHandlers(getMainWindow: () => BrowserWindow | null): v
     try {
       const { default: exifr } = await import("exifr");
       const tags = await exifr.parse(fullPath, {
-        pick: ["Make", "Model", "ExposureTime", "FNumber", "ISO", "FocalLength", "Flash", "DateTimeOriginal"]
+        pick: ["Make", "Model", "ExposureTime", "FNumber", "ISO", "FocalLength", "Flash"]
       });
       if (!tags) return null;
       const info: ExifInfo = {};
@@ -328,9 +323,6 @@ export function registerFsHandlers(getMainWindow: () => BrowserWindow | null): v
       if (tags.ISO != null) info.iso = Number(tags.ISO);
       if (tags.FocalLength != null) info.focalLength = `${Number(tags.FocalLength)} mm`;
       if (tags.Flash != null) info.flash = String(tags.Flash).toLowerCase().includes("did not") ? "No" : "Yes";
-      if (tags.DateTimeOriginal instanceof Date && !Number.isNaN(tags.DateTimeOriginal.getTime())) {
-        info.dateTaken = tags.DateTimeOriginal.toISOString();
-      }
       return info;
     } catch {
       return null;
@@ -347,12 +339,6 @@ export function registerFsHandlers(getMainWindow: () => BrowserWindow | null): v
       return target;
     }
   );
-
-  ipcMain.handle("acdsee:mkdir", async (_event, parentDir: string, name: string): Promise<string> => {
-    const target = await uniqueTargetPath(parentDir, name);
-    await fs.mkdir(target);
-    return target;
-  });
 
   ipcMain.handle("acdsee:rename", async (_event, fullPath: string, newName: string): Promise<string> => {
     const target = path.join(path.dirname(fullPath), newName);

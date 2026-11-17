@@ -8,7 +8,6 @@ export type MenuItem = {
   checked?: boolean;
   disabled?: boolean;
   submenu?: MenuItem[];
-  danger?: boolean;
 };
 
 export type MenuDef = {
@@ -103,7 +102,7 @@ export default function MenuBar({ menus, onCommand }: Props) {
                   <button
                     type="button"
                     key={`${item.label}-${itemIndex}`}
-                    className={`menu-item ${item.disabled ? "disabled" : ""} ${item.checked ? "checked" : ""} ${item.danger ? "danger" : ""}`}
+                    className={`menu-item ${item.disabled ? "disabled" : ""} ${item.checked ? "checked" : ""}`}
                     onClick={() => choose(item)}
                     disabled={item.disabled}
                     role="menuitem"

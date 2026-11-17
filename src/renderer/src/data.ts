@@ -25,7 +25,6 @@ export type Folder = {
   name: string;
   icon: FolderIcon;
   parent: string | null;
-  hint?: string;
   /** Absolute filesystem path, or "" for virtual nodes (My Computer). */
   path: string;
 };
@@ -55,7 +54,6 @@ export type Photo = {
   rotation: number;
   flipped?: boolean;
   rating: number;
-  hidden?: boolean;
   tags: string[];
 };
 
@@ -64,16 +62,9 @@ export type Photo = {
 // ---------------------------------------------------------------------------
 
 let runtimeFolders: Folder[] = [];
-let runtimePhotos: Photo[] = [];
 
-/** Legacy export kept for compatibility; prefer the folders in App state. */
-export const folders: Folder[] = [];
-
-export function setRuntimeLibrary(nextFolders: Folder[], nextPhotos: Photo[]): void {
+export function setRuntimeLibrary(nextFolders: Folder[]): void {
   runtimeFolders = nextFolders;
-  runtimePhotos = nextPhotos;
-  folders.length = 0;
-  folders.push(...nextFolders);
 }
 
 export const folderById = (id: string): Folder | undefined =>
@@ -81,10 +72,6 @@ export const folderById = (id: string): Folder | undefined =>
 
 export function childFolders(id: string): Folder[] {
   return runtimeFolders.filter((f) => f.parent === id);
-}
-
-export function photoCount(folderId: string, all: Photo[]): number {
-  return all.filter((p) => p.folderId === folderId).length;
 }
 
 export function descendantPhotoCount(folderId: string, all: Photo[]): number {
@@ -128,20 +115,6 @@ export function folderPathString(id: string): string {
   return chain.map((f) => labels[f.id] ?? f.name).join("\\");
 }
 
-export const folderCover = (folderId: string, all: Photo[]): Photo | undefined => {
-  const direct = all.find((p) => p.folderId === folderId);
-  if (direct) return direct;
-  return folderCoverRecursive(folderId, all);
-};
-
-function folderCoverRecursive(folderId: string, all: Photo[]): Photo | undefined {
-  for (const child of childFolders(folderId)) {
-    const found = folderCover(child.id, all);
-    if (found) return found;
-  }
-  return undefined;
-}
-
 export const formatBytes = (bytes: number): string => {
   if (!Number.isFinite(bytes) || bytes < 0) return "—";
   if (bytes < 1024) return `${bytes} B`;
@@ -158,9 +131,6 @@ export const formatDate = (iso: string): string => {
 
 export const imageTransform = (p: Photo): string =>
   `rotate(${p.rotation}deg) scaleX(${p.flipped ? -1 : 1})`;
-
-export const fileExt = (p: Photo) =>
-  p.format === "JPEG" ? "JPG File" : `${p.format || "Image"} File`;
 
 export function sortPhotos(items: Photo[], key: string, dir: "asc" | "desc"): Photo[] {
   const mult = dir === "asc" ? 1 : -1;
@@ -186,6 +156,3 @@ export function sortPhotos(items: Photo[], key: string, dir: "asc" | "desc"): Ph
 
 export const totalSize = (items: Photo[]): number =>
   items.reduce((sum, item) => sum + item.size, 0);
-
-export const runtimePhotoById = (id: string): Photo | undefined =>
-  runtimePhotos.find((p) => p.id === id);
