@@ -119,6 +119,8 @@ void app.whenReady().then(() => {
   });
 });
 
+// Classic behavior: closing the window quits the app on every platform.
+// (The macOS convention of lingering without windows only confuses here.)
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  app.quit();
 });

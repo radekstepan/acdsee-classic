@@ -19,6 +19,13 @@ const mainBundle = await fs.readFile(path.join(root, "out", "main", "index.js"),
 assert(!/["']image-size\/fromFile["']/.test(mainBundle), "image-size is bundled into main");
 assert(!/import\(["']exifr["']\)/.test(mainBundle), "exifr is bundled into main");
 
+// Closing the last window must quit the app on every platform (no macOS exemption:
+// a lingering process after close is the reported bug).
+const mainSource = await fs.readFile(path.join(root, "src", "main", "index.ts"), "utf8");
+const closedBlock = mainSource.match(/app\.on\("window-all-closed"[\s\S]*?\n\}\)/);
+assert(closedBlock?.[0].includes("app.quit()"), "app quits when all windows close");
+assert(closedBlock && !closedBlock[0].includes("darwin"), "quit applies on macOS too");
+
 // Bundle the real main-process sources (electron external -> stubbed).
 const bundlePath = path.join(root, "out", "test-fs.mjs");
 await fs.mkdir(path.dirname(bundlePath), { recursive: true });
