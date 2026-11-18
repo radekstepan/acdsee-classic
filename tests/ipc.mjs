@@ -40,7 +40,7 @@ await esbuild.build({
 });
 
 const stub = await import("./electron-stub.mjs");
-const { registerFsHandlers, orientPixels } = await import(pathToFileURL(bundlePath).href);
+const { registerFsHandlers } = await import(pathToFileURL(bundlePath).href);
 registerFsHandlers();
 
 const invoke = async (channel, ...args) => {
@@ -112,6 +112,10 @@ for (let orientation = 1; orientation <= 8; orientation++) {
     orientedMeta?.width === (swapped ? 4 : 8) && orientedMeta?.height === (swapped ? 8 : 4),
     `orientation ${orientation} reports displayed ${expected} dimensions (${orientedMeta?.width}x${orientedMeta?.height})`
   );
+  assert(
+    orientedMeta?.orientation === orientation,
+    `orientation ${orientation} flag is exposed for callers (${orientedMeta?.orientation})`
+  );
 }
 
 const exif = await invoke("acdsee:exif", path.join(fixture, "a-lake.jpg"));
@@ -120,33 +124,21 @@ assert(exif === null || typeof exif === "object", "exif does not throw");
 const thumbs = await invoke("acdsee:thumbs", [path.join(fixture, "a-lake.jpg"), path.join(fixture, "nope.jpg")], 192);
 assert(thumbs[0].dataUrl?.startsWith("data:image/"), "thumbnail data URL returned");
 assert(thumbs[1].dataUrl === null, "missing file thumbnail is null");
-assert(stub.createdThumbBuffers.length === 0, "orientation-1 thumbnails skip rotation");
+assert(thumbs[0].width === 192 && thumbs[0].height === 128, "thumbnail reports bitmap dims for tile sizing");
+assert(thumbs[1].width === 0 && thumbs[1].height === 0, "missing file thumbnail dims are zero");
 
-// nativeImage ignores EXIF, so the handler counter-rotates thumbnail pixels
-// into displayed orientation (checked here against hand-derived mappings).
-const px = (n) => [n, 0, 0, 0];
-const firsts = (buf) => [...buf.filter((_, i) => i % 4 === 0)].join("");
-const strip = Buffer.from([...px(1), ...px(2)]);
-for (const [o, W, H, order] of [
-  [1, 2, 1, "12"], [2, 2, 1, "21"], [3, 2, 1, "21"], [4, 2, 1, "12"],
-  [5, 1, 2, "12"], [6, 1, 2, "12"], [7, 1, 2, "21"], [8, 1, 2, "21"],
-  [0, 2, 1, "12"], [9, 2, 1, "12"]
-]) {
-  const r = orientPixels(strip, 2, 1, o);
-  assert(r.width === W && r.height === H && firsts(r.data) === order, `orientPixels o=${o} -> ${W}x${H} [${order}]`);
-}
-const square = Buffer.from([...px(1), ...px(2), ...px(3), ...px(4)]);
-for (const [o, order] of [[1, "1234"], [2, "2143"], [3, "4321"], [4, "3412"], [5, "1324"], [6, "3142"], [7, "4231"], [8, "2413"]]) {
-  const r = orientPixels(square, 2, 2, o);
-  assert(r.width === 2 && r.height === 2 && firsts(r.data) === order, `orientPixels 2x2 o=${o} -> [${order}]`);
-}
-assert(orientPixels(Buffer.from([1, 2]), 2, 1, 6).data.equals(Buffer.from([1, 2])), "short bitmaps pass through untouched");
-
-const orientedThumbs = await invoke("acdsee:thumbs", [path.join(fixture, "orient-6.jpg")], 192);
-assert(orientedThumbs[0].dataUrl?.includes("ROTATED-THUMB"), "oriented thumbnail goes through counter-rotation");
-const rotated = stub.createdThumbBuffers.at(-1);
-assert(rotated?.width === 1 && rotated?.height === 2, `rotated thumbnail swaps to portrait (${rotated?.width}x${rotated?.height})`);
-assert(rotated?.buffer.equals(stub.thumbPattern), "rotated thumbnail pixels match the 90 CW mapping");
+// REGRESSION (squished tiles): small OS thumbnail requests return
+// cover-cropped bitmaps, so the handler must scale tile sizes up to the
+// aspect-preserving range (384px+ verified via QuickLook).
+const lastRequest = () => stub.thumbRequests.at(-1);
+// NOTE: each case uses a distinct path — makeThumb caches by path+mtime+size,
+// so reusing a path would hit the cache and record no new request.
+await invoke("acdsee:thumbs", [path.join(fixture, "a-lake.jpg")], 96);
+assert(lastRequest() === 384, `tile size 96 requests a 384px bitmap (${lastRequest()})`);
+await invoke("acdsee:thumbs", [path.join(fixture, "sub", "d-trip.jpg")], 8);
+assert(lastRequest() === 128, `tiny tile sizes clamp to a 128px floor (${lastRequest()})`);
+await invoke("acdsee:thumbs", [path.join(fixture, "notes.txt")], 9999);
+assert(lastRequest() === 512, `huge tile sizes clamp to a 512px ceiling (${lastRequest()})`);
 
 const pixel = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 const saved = await invoke("acdsee:save-data-url", fixture, "pixel.png", pixel);

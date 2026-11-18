@@ -2,7 +2,7 @@ import { execFile } from "child_process";
 import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
-import { app, ipcMain, nativeImage, shell, type NativeImage } from "electron";
+import { app, ipcMain, nativeImage, shell } from "electron";
 import { imageSizeFromFile } from "image-size/fromFile";
 import {
   VIRTUAL_ROOT,
@@ -159,10 +159,10 @@ async function listSubfolders(dirPath: string, parentId: string): Promise<Folder
 // Thumbnail cache (in-memory LRU over data URLs, keyed by path+mtime+size)
 // ---------------------------------------------------------------------------
 
-const thumbCache = new Map<string, string>();
+const thumbCache = new Map<string, { dataUrl: string; width: number; height: number }>();
 const THUMB_CACHE_LIMIT = 600;
 
-function thumbCacheGet(key: string): string | undefined {
+function thumbCacheGet(key: string): { dataUrl: string; width: number; height: number } | undefined {
   const hit = thumbCache.get(key);
   if (hit === undefined) return undefined;
   thumbCache.delete(key);
@@ -170,7 +170,7 @@ function thumbCacheGet(key: string): string | undefined {
   return hit;
 }
 
-function thumbCacheSet(key: string, value: string): void {
+function thumbCacheSet(key: string, value: { dataUrl: string; width: number; height: number }): void {
   if (thumbCache.size >= THUMB_CACHE_LIMIT) {
     const oldest = thumbCache.keys().next();
     if (!oldest.done) thumbCache.delete(oldest.value);
@@ -178,111 +178,40 @@ function thumbCacheSet(key: string, value: string): void {
   thumbCache.set(key, value);
 }
 
-/** EXIF orientation tag (1-8) for display correction, 1 when absent. */
-async function readOrientation(fullPath: string): Promise<number> {
-  try {
-    const info = await imageSizeFromFile(fullPath);
-    const orientation = info.orientation ?? 1;
-    return orientation >= 1 && orientation <= 8 ? orientation : 1;
-  } catch {
-    return 1;
-  }
-}
-
-/**
- * Rotate/flip raw 4-byte pixels from stored to displayed orientation.
- * Pure (no Electron) so the mapping is unit-testable; orientations 5-8 swap
- * width and height. Unknown orientations pass through untouched.
- */
-export function orientPixels(
-  src: Buffer,
-  w: number,
-  h: number,
-  orientation: number
-): { data: Buffer; width: number; height: number } {
-  const identity = { data: src, width: w, height: h };
-  if (orientation < 2 || orientation > 8 || w <= 0 || h <= 0) return identity;
-  if (src.length < w * h * 4) return identity;
-  const swap = orientation >= 5;
-  const W = swap ? h : w;
-  const H = swap ? w : h;
-  const dst = Buffer.allocUnsafe(W * H * 4);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      let sx = x;
-      let sy = y;
-      switch (orientation) {
-        case 2:
-          sx = w - 1 - x;
-          break;
-        case 3:
-          sx = w - 1 - x;
-          sy = h - 1 - y;
-          break;
-        case 4:
-          sy = h - 1 - y;
-          break;
-        case 5:
-          sx = y;
-          sy = x;
-          break;
-        case 6:
-          sx = y;
-          sy = h - 1 - x;
-          break;
-        case 7:
-          sx = w - 1 - y;
-          sy = h - 1 - x;
-          break;
-        case 8:
-          sx = w - 1 - y;
-          sy = x;
-          break;
-      }
-      const s = (sy * w + sx) * 4;
-      const d = (y * W + x) * 4;
-      dst[d] = src[s];
-      dst[d + 1] = src[s + 1];
-      dst[d + 2] = src[s + 2];
-      dst[d + 3] = src[s + 3];
-    }
-  }
-  return { data: dst, width: W, height: H };
-}
-
-/** Counter-rotate a thumbnail bitmap into displayed orientation. */
-function orientThumbnail(image: NativeImage, orientation: number): NativeImage {
-  if (orientation < 2 || orientation > 8 || image.isEmpty()) return image;
-  try {
-    const { width, height } = image.getSize();
-    const bitmap = image.toBitmap();
-    const { data, width: W, height: H } = orientPixels(bitmap, width, height, orientation);
-    if (data === bitmap) return image;
-    return nativeImage.createFromBuffer(data, { width: W, height: H });
-  } catch {
-    return image;
-  }
-}
-
-async function makeThumb(fullPath: string, size: number): Promise<string | null> {
+async function makeThumb(
+  fullPath: string,
+  size: number
+): Promise<{ dataUrl: string; width: number; height: number } | null> {
   const st = await safeStat(fullPath);
   if (!st) return null;
   const key = `${fullPath}:${st.mtimeMs}:${size}`;
   const cached = thumbCacheGet(key);
   if (cached) return cached;
   try {
-    let image = await nativeImage.createThumbnailFromPath(fullPath, {
+    // The platform thumbnailer (QuickLook on macOS) already returns upright
+    // bitmaps, so no EXIF handling is needed here. Small requests can return
+    // cover-cropped bitmaps, so callers ask large (see thumbs handler).
+    const image = await nativeImage.createThumbnailFromPath(fullPath, {
       width: size,
       height: size
     });
     if (image.isEmpty()) return null;
-    // nativeImage ignores EXIF orientation, so without this a portrait shot
-    // comes back as a landscape bitmap (letterboxed in its portrait box).
-    image = orientThumbnail(image, await readOrientation(fullPath));
-    if (image.isEmpty()) return null;
-    const dataUrl = image.toDataURL();
-    thumbCacheSet(key, dataUrl);
-    return dataUrl;
+    // getSize is scale-independent for our purpose: only the aspect is used
+    // to size the tile, so Retina point-vs-pixel differences don't matter.
+    const { width, height } = image.getSize();
+    let dataUrl: string;
+    if (fullPath.toLowerCase().endsWith(".jpg") || fullPath.toLowerCase().endsWith(".jpeg")) {
+      try {
+        dataUrl = `data:image/jpeg;base64,${image.toJPEG(82).toString("base64")}`;
+      } catch {
+        dataUrl = image.toDataURL();
+      }
+    } else {
+      dataUrl = image.toDataURL();
+    }
+    const out = { dataUrl, width, height };
+    thumbCacheSet(key, out);
+    return out;
   } catch {
     return null;
   }
@@ -374,13 +303,23 @@ export function registerFsHandlers(): void {
   ipcMain.handle(
     "acdsee:thumbs",
     async (_event, paths: string[], size: number): Promise<ThumbResult[]> => {
-      const clamped = Math.min(512, Math.max(32, size || 256));
+      // The renderer passes its tile size; requests go out ~4x larger.
+      // Small QuickLook requests return cover-cropped bitmaps (verified: a
+      // 192px request cropped a portrait photo to 144x120, while 384px
+      // returned the full 3:4 frame), so tiles would show zoomed crops with
+      // letterbox bars. 384px+ requests preserve the full frame.
+      // REGRESSION: never shrink this multiplier without re-verifying tile
+      // aspect against QuickLook output (see tests/ipc.mjs size assertions).
+      const clamped = Math.min(512, Math.max(128, Math.round((size || 64) * 4)));
       const results: ThumbResult[] = [];
       const CHUNK = 16;
       for (let i = 0; i < paths.length; i += CHUNK) {
         const chunk = paths.slice(i, i + CHUNK);
-        const urls = await Promise.all(chunk.map((p) => makeThumb(p, clamped)));
-        chunk.forEach((p, index) => results.push({ path: p, dataUrl: urls[index] }));
+        const thumbs = await Promise.all(chunk.map((p) => makeThumb(p, clamped)));
+        chunk.forEach((p, index) => {
+          const t = thumbs[index];
+          results.push({ path: p, dataUrl: t?.dataUrl ?? null, width: t?.width ?? 0, height: t?.height ?? 0 });
+        });
       }
       return results;
     }
@@ -390,14 +329,20 @@ export function registerFsHandlers(): void {
     try {
       const info = await imageSizeFromFile(fullPath);
       if (!info.width || !info.height) return null;
+      // Best-effort EXIF orientation flag (1-8), 1 when missing or unreadable
+      // (photomator's readOrientation contract). image-size already parses the
+      // tag, so no second file read is needed.
+      const raw = info.orientation ?? 1;
+      const clamped = raw >= 1 && raw <= 8 ? raw : 1;
       // Browsers auto-apply the EXIF orientation when rendering, so a portrait
       // shot stored as landscape (orientations 5-8) must report the displayed
-      // dimensions — otherwise thumbnails, preview and viewer stretch it.
-      const orientation = info.orientation ?? 1;
-      const swap = orientation >= 5 && orientation <= 8;
+      // dimensions — otherwise preview and viewer stretch it. The OS
+      // thumbnailer already returns upright bitmaps (verified via QuickLook),
+      // so thumbs need no counter-rotation; the flag is exposed for callers.
+      const swap = clamped >= 5 && clamped <= 8;
       const width = swap ? info.height : info.width;
       const height = swap ? info.width : info.height;
-      return { width, height, format: (info.type ?? "").toUpperCase() };
+      return { width, height, format: (info.type ?? "").toUpperCase(), orientation: clamped };
     } catch {
       return null;
     }

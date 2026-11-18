@@ -126,11 +126,14 @@ function fileFromDirEntry(entry: { name: string; path: string; size: number; mti
     path: entry.path,
     src: old?.src ?? "",
     fullSrc: localFileUrl(entry.path),
+    tw: old?.tw ?? 0,
+    th: old?.th ?? 0,
     folderId,
     size: entry.size,
     w: old?.w ?? 0,
     h: old?.h ?? 0,
     bpp: old?.bpp ?? fmt.bpp,
+    orientation: old?.orientation ?? 1,
     created: old?.created ?? entry.mtimeMs,
     modified: entry.mtimeMs,
     accessed: old?.accessed ?? entry.mtimeMs,
@@ -331,8 +334,9 @@ function useStoreImpl() {
     const paths = files.map((f) => f.path).filter(Boolean);
     if (!paths.length) return;
     try {
-      const results = await desktop().thumbs(paths, clamp(Math.round(thumbSize * 2), 64, 512));
-      const byPath = new Map(results.map((r) => [r.path, r.dataUrl]));
+      // Tile size; main scales the OS request up (see thumbs handler).
+      const results = await desktop().thumbs(paths, Math.round(thumbSize));
+      const byPath = new Map(results.map((r) => [r.path, r]));
       setFolders((prev) => {
         const fol = prev[targetId];
         if (!fol) return prev;
@@ -341,8 +345,8 @@ function useStoreImpl() {
           [targetId]: {
             ...fol,
             files: fol.files.map((file) => {
-              const url = byPath.get(file.path);
-              return url ? { ...file, src: url } : file;
+              const t = byPath.get(file.path);
+              return t?.dataUrl ? { ...file, src: t.dataUrl, tw: t.width, th: t.height } : file;
             })
           }
         };
@@ -361,7 +365,7 @@ function useStoreImpl() {
         const metas = await Promise.all(
           chunk.map((f) => desktop().imageMeta(f.path).catch(() => null))
         );
-        const byPath = new Map<string, { width: number; height: number; format: string }>();
+        const byPath = new Map<string, { width: number; height: number; format: string; orientation: number }>();
         chunk.forEach((f, index) => {
           const meta = metas[index];
           if (meta) byPath.set(f.path, meta);
@@ -377,7 +381,7 @@ function useStoreImpl() {
                 files: fol.files.map((file) => {
                   const meta = byPath.get(file.path);
                   return meta
-                    ? { ...file, w: meta.width, h: meta.height, bpp: formatFor(file.ext).bpp }
+                    ? { ...file, w: meta.width, h: meta.height, bpp: formatFor(file.ext).bpp, orientation: meta.orientation ?? 1 }
                     : file;
                 })
               }
@@ -1575,7 +1579,7 @@ function useStoreImpl() {
           return false;
         }
       }
-      updateFile(id, { w: width, h: height, modified: Date.now() });
+      updateFile(id, { w: width, h: height, orientation: 1, modified: Date.now() });
       return true;
     },
     [desktopMode, loadFolder, msg, updateFile]

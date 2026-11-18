@@ -69,12 +69,17 @@ vendor/original-templates/  the two template zips this app was built from
   are loaded lazily from `window.acdsee` (listRoots → listChildren/listDir), while
   commands, menus and dialogs read the same store.
 - **Images:** full-size via the `local-file://file/<encoded-path>` protocol (with
-  `Access-Control-Allow-Origin: *` so canvas convert/resize can read pixels);
-  thumbnails via `acdsee:thumbs` IPC (`nativeImage.createThumbnailFromPath`
-  counter-rotated for EXIF orientation, LRU cached); `image-meta` reports
-  displayed (orientation-applied) dimensions.
-  `FileEntry.src` = thumbnail, `FileEntry.fullSrc` = full image; components use
-  `fullSrc || src`. `components/EditedImage.tsx` applies rotate/flip/filters.
+  `Access-Control-Allow-Origin: *` so canvas convert/resize can read pixels;
+  browsers auto-rotate it for EXIF); thumbnails via `acdsee:thumbs` IPC
+  (`nativeImage.createThumbnailFromPath`, upright bitmaps from the OS
+  thumbnailer requested large — small requests return cover-crops — JPEGs
+  encoded as JPEG, LRU cached; never counter-rotated, that double-rotates);
+  `image-meta` reports displayed (orientation-applied) dimensions plus the raw
+  `orientation` flag (best-effort 1-8 via image-size, photomator's
+  readOrientation contract). `FileEntry.src` = thumbnail (with `tw`/`th`
+  bitmap dims for tile sizing), `FileEntry.fullSrc` = full image; components
+  use `fullSrc || src`. Tiles fit to the bitmap dims with aspect-preserving
+  contain so a mismatch can never skew.
 - **IDs:** real files/folders use absolute paths as ids, so rename/move/delete map
   1:1 to disk. Virtual nodes use `__` ids: `__computer__`, `__pictures__`,
   `__documents__`, `__desktopdir__`, `__network__`, `recycle`, `desktop`.

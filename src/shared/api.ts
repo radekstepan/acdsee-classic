@@ -43,6 +43,8 @@ export type ImageMeta = {
   width: number;
   height: number;
   format: string;
+  /** EXIF orientation flag (1-8) as stored in the file; 1 when absent. */
+  orientation: number;
 };
 
 export type ExifInfo = {
@@ -66,6 +68,9 @@ export type SystemPaths = {
 export type ThumbResult = {
   path: string;
   dataUrl: string | null;
+  /** Bitmap dimensions in points (aspect only — tiles fit to these). */
+  width: number;
+  height: number;
 };
 
 /** Full-file URL for a local path, served by the `local-file://` protocol. */
@@ -83,7 +88,9 @@ export type AcdseeApi = {
   listChildren: (id: string) => Promise<FolderNode[]>;
   /** Folder contents for the file stage. */
   listDir: (path: string, includeHidden?: boolean) => Promise<ListDirResult>;
-  /** Thumbnails as JPEG data URLs. Returns null per path when unavailable. */
+  /** Thumbnails as JPEG data URLs. `size` is the tile size; the main process
+      scales the OS request up (small requests return cover-crops). Returns
+      null per path when unavailable, with bitmap dims for tile sizing. */
   thumbs: (paths: string[], size: number) => Promise<ThumbResult[]>;
   /** Pixel dimensions + detected format, without decoding the whole file. */
   imageMeta: (path: string) => Promise<ImageMeta | null>;

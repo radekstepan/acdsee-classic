@@ -29,23 +29,18 @@ export const shell = {
   showItemInFolder: (target) => shownInFolder.push(target)
 };
 
-/** 2x1 test pixels (4 bytes each) returned as every fake thumbnail bitmap. */
-export const thumbPattern = Buffer.from([10, 11, 12, 13, 20, 21, 22, 23]);
-/** Buffers passed to createFromBuffer by EXIF counter-rotation. */
-export const createdThumbBuffers = [];
-
-const fakeImage = (dataUrl) => ({
-  isEmpty: () => false,
-  getSize: () => ({ width: 2, height: 1 }),
-  toBitmap: () => Buffer.from(thumbPattern),
-  toDataURL: () => dataUrl
-});
+/** Requested thumbnail sizes, per createThumbnailFromPath call. */
+export const thumbRequests = [];
 
 export const nativeImage = {
-  createThumbnailFromPath: async () => fakeImage("data:image/jpeg;base64,/9j/TEST-THUMB"),
-  createFromBuffer: (buffer, options) => {
-    createdThumbBuffers.push({ buffer: Buffer.from(buffer), width: options?.width, height: options?.height });
-    return fakeImage("data:image/jpeg;base64,/9j/ROTATED-THUMB");
+  createThumbnailFromPath: async (_path, size) => {
+    thumbRequests.push(size?.width ?? 0);
+    return {
+      isEmpty: () => false,
+      getSize: () => ({ width: 192, height: 128 }),
+      toJPEG: () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      toDataURL: () => "data:image/jpeg;base64,/9j/TEST-THUMB"
+    };
   }
 };
 

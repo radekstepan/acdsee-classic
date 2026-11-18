@@ -334,7 +334,10 @@ export function FileView({ onContext, onOpen }: Props) {
       );
     } else {
       const f = file(id);
-      const box = fitBox(f.w, f.h, size, size);
+      // Size the tile from the thumbnail bitmap itself when known: the box
+      // then always matches the pixels, so contain fills exactly (no bars,
+      // never stretched). Falls back to file dims until thumbs arrive.
+      const box = fitBox(f.tw || f.w, f.th || f.h, size, size);
       visual = (
         <div
           className="flex items-center justify-center"

@@ -64,6 +64,10 @@ export interface FileEntry {
   path: string;
   /** Thumbnail source (data URL once loaded, bundled URL in demo mode). */
   src: string;
+  /** Thumbnail bitmap dimensions (points); 0 until loaded. Tiles fit to
+      these so the box always matches the bitmap — never stretched, no bars. */
+  tw: number;
+  th: number;
   /** Full-resolution source used by the viewer/preview. */
   fullSrc: string;
   folderId: string;
@@ -71,6 +75,9 @@ export interface FileEntry {
   w: number;
   h: number;
   bpp: number;
+  /** EXIF orientation flag (1-8) from image-meta; 1 when absent. Display
+      dimensions w/h already have it applied (swapped for 5-8). */
+  orientation: number;
   created: number;
   modified: number;
   accessed: number;

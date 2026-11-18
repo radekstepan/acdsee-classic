@@ -63,6 +63,11 @@ const addFile = (p, size, width, height, format) => {
 // /demo/Pictures
 addFile("/demo/Pictures/lake.jpg", 184_320, 900, 600, "jpeg");
 addFile("/demo/Pictures/cat.png", 96_540, 640, 480, "png");
+// Landscape file whose thumbnail bitmap is squarish (simulates the QuickLook
+// cover-crop at small request sizes: bitmap aspect != file aspect). Tile must
+// size from the bitmap, not the file — see tileBox assertion below.
+addFile("/demo/Pictures/wide.jpg", 150_000, 1200, 800, "jpeg");
+const thumbDims = new Map([["/demo/Pictures/wide.jpg", { width: 144, height: 120 }]]);
 // /demo/Pictures/Trips
 addFile("/demo/Pictures/Trips/trip-1.jpg", 121_400, 800, 600, "jpeg");
 addFile("/demo/Pictures/Trips/trip-2.jpg", 210_900, 1024, 768, "jpeg");
@@ -136,9 +141,16 @@ const createApi = () => ({
     };
   },
 
-  thumbs: async (paths) => paths.map((p) => ({ path: p, dataUrl: TINY_PNG })),
+  thumbs: async (paths) => paths.map((p) => {
+    const d = dims.get(p);
+    const t = thumbDims.get(p) ?? d;
+    return { path: p, dataUrl: TINY_PNG, width: t?.width ?? 0, height: t?.height ?? 0 };
+  }),
 
-  imageMeta: async (p) => dims.get(p) ?? { width: 640, height: 480, format: "jpeg" },
+  imageMeta: async (p) => {
+    const d = dims.get(p) ?? { width: 640, height: 480, format: "jpeg" };
+    return { ...d, orientation: 1 };
+  },
 
   exif: async () => null,
 
@@ -327,6 +339,16 @@ const byText = (selector, text) =>
 
 const fileLabel = (text) => byText(".file-label", text);
 const fileItem = (text) => fileLabel(text)?.closest("[data-id]") ?? null;
+// Rendered photo box (EditedImage root) inside a file tile, e.g. "128pxx107px".
+const tileBox = (text) => {
+  const item = fileItem(text);
+  const box = item
+    ? [...item.querySelectorAll("div")].find(
+        (el) => el.style.position === "relative" && el.style.overflow === "hidden" && el.style.width
+      )
+    : null;
+  return box ? `${box.style.width}x${box.style.height}` : null;
+};
 
 const windowTitle = (el) => (el.querySelector(".title-bar-text")?.textContent ?? "").trim();
 const windowByTitle = (text) =>
@@ -389,6 +411,16 @@ assert(
   "Trips renders as a folder tile with its absolute path id"
 );
 assert(listDirCalls.includes("/demo/Pictures"), "listDir was called for the start folder");
+
+// REGRESSION (squished tiles): wide.jpg is a 1200x800 file whose thumbnail
+// bitmap is 144x120 (cover-crop aspect). The tile must size from the bitmap
+// (fitBox(144,120,128,128) = 128x107 at the restored thumbSize 128), not the
+// file (which would give 128x85 and stretch/letterbox the pixels).
+const wideBox = await waitFor(() => {
+  const box = tileBox("wide.jpg");
+  return box && box !== "128pxx85px" ? box : null;
+}, 10000);
+assert(wideBox === "128pxx107px", `tile sizes from the thumbnail bitmap, not file dims (${wideBox})`);
 
 /* ---------------- tree navigation ---------------- */
 const tripsLabel = treeLabel("Trips");

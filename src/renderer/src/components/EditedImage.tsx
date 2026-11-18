@@ -21,6 +21,9 @@ export function EditedImage({ file, w, h, thumb, edit, style, className }: Props
   const swap = e.rot % 180 !== 0;
   const iw = swap ? h : w;
   const ih = swap ? w : h;
+  // Full images auto-rotate for EXIF in the browser and OS thumbnails arrive
+  // upright, so no EXIF counter-rotation here (it would double-rotate).
+  // Only the user's rotate/flip edit applies.
   const src = thumb ? file.src || file.fullSrc : file.fullSrc || file.src;
 
   if (!src) {
