@@ -27,6 +27,8 @@ function loadWindowState(): Partial<WindowState> {
 /** Persist size/position, keeping the restored bounds when maximized. */
 function saveWindowState(): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
+  // Full screen is temporary viewer state; keep the windowed bounds.
+  if (mainWindow.isFullScreen()) return;
   const maximized = mainWindow.isMaximized();
   const bounds = maximized ? mainWindow.getNormalBounds() : mainWindow.getBounds();
   try {
@@ -111,6 +113,12 @@ function createWindow(): void {
   mainWindow.on("maximize", saveWindowStateSoon);
   mainWindow.on("unmaximize", saveWindowStateSoon);
   mainWindow.on("close", saveWindowState);
+  mainWindow.on("enter-full-screen", () =>
+    mainWindow?.webContents.send("acdsee:window-fullscreen-changed", true)
+  );
+  mainWindow.on("leave-full-screen", () =>
+    mainWindow?.webContents.send("acdsee:window-fullscreen-changed", false)
+  );
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     void shell.openExternal(details.url);
@@ -154,6 +162,9 @@ function registerWindowControls(): void {
   });
   ipcMain.on("acdsee:window-close", () => mainWindow?.close());
   ipcMain.handle("acdsee:window-is-maximized", () => mainWindow?.isMaximized() ?? false);
+  ipcMain.on("acdsee:window-set-fullscreen", (_event, full: unknown) => {
+    mainWindow?.setFullScreen(full === true);
+  });
 }
 
 function setupMenu(): void {

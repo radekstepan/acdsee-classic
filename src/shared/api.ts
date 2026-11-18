@@ -109,6 +109,9 @@ export type AcdseeApi = {
     toggleMaximize: () => void;
     close: () => void;
     isMaximized: () => Promise<boolean>;
+    setFullScreen: (full: boolean) => void;
+    /** Subscribe to OS full-screen changes; returns an unsubscribe function. */
+    onFullScreenChange: (callback: (full: boolean) => void) => () => void;
   };
 };
 

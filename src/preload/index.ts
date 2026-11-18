@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import type { AcdseeApi } from "../shared/api";
 
 const api: AcdseeApi = {
@@ -33,7 +33,13 @@ const api: AcdseeApi = {
     minimize: () => ipcRenderer.send("acdsee:window-minimize"),
     toggleMaximize: () => ipcRenderer.send("acdsee:window-toggle-maximize"),
     close: () => ipcRenderer.send("acdsee:window-close"),
-    isMaximized: () => ipcRenderer.invoke("acdsee:window-is-maximized")
+    isMaximized: () => ipcRenderer.invoke("acdsee:window-is-maximized"),
+    setFullScreen: (full: boolean) => ipcRenderer.send("acdsee:window-set-fullscreen", full),
+    onFullScreenChange: (callback: (full: boolean) => void) => {
+      const handler = (_event: IpcRendererEvent, full: boolean) => callback(full);
+      ipcRenderer.on("acdsee:window-fullscreen-changed", handler);
+      return () => ipcRenderer.removeListener("acdsee:window-fullscreen-changed", handler);
+    }
   }
 };
 

@@ -136,7 +136,14 @@ assert(stub.opened.length === openedBefore + 1, "open-trash delegates to the pla
 // Channel parity: every channel the preload calls must have a main handler.
 const preloadSource = await fs.readFile(path.join(root, "out", "preload", "index.mjs"), "utf8");
 const called = [...new Set([...preloadSource.matchAll(/"(acdsee:[a-z-]+)"/g)].map((m) => m[1]))];
-const windowSends = ["acdsee:window-minimize", "acdsee:window-toggle-maximize", "acdsee:window-close", "acdsee:window-is-maximized"];
+const windowSends = [
+  "acdsee:window-minimize",
+  "acdsee:window-toggle-maximize",
+  "acdsee:window-close",
+  "acdsee:window-is-maximized",
+  "acdsee:window-set-fullscreen",
+  "acdsee:window-fullscreen-changed"
+];
 for (const channel of called) {
   if (windowSends.includes(channel)) continue; // registered in main/index.ts, not fs.ts
   assert(stub.handlers.has(channel), `handler registered for ${channel}`);

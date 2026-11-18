@@ -38,6 +38,7 @@ const dims = new Map(); // path -> { width, height, format }
 const ops = [];
 const listDirCalls = [];
 const stateSaves = [];
+const windowCalls = [];
 
 const baseName = (p) => p.split("/").filter(Boolean).pop() ?? p;
 const parentPath = (p) => {
@@ -225,7 +226,9 @@ const createApi = () => ({
     minimize: () => {},
     toggleMaximize: () => {},
     close: () => {},
-    isMaximized: async () => false
+    isMaximized: async () => false,
+    setFullScreen: (full) => windowCalls.push({ op: "setFullScreen", full }),
+    onFullScreenChange: () => () => {}
   }
 });
 
@@ -247,7 +250,7 @@ const dom = new JSDOM(source, {
   pretendToBeVisual: true,
   virtualConsole,
   beforeParse(window) {
-    window.__acdseeTest = { ops, listDirCalls, stateSaves };
+    window.__acdseeTest = { ops, listDirCalls, stateSaves, windowCalls };
     window.acdsee = createApi();
 
     // jsdom gaps used by the classic panes / viewer.
@@ -426,6 +429,34 @@ const zoomPanel = viewer
   ? [...viewer.querySelectorAll(".status-panel")].find((el) => (el.textContent ?? "").includes("Zoom:"))
   : null;
 assert(zoomPanel && /Zoom:\s*\d+%/.test(zoomPanel.textContent ?? ""), "viewer status bar shows the zoom level");
+
+// Enter must toggle the real OS full screen. The browser file stage often keeps
+// DOM focus behind the viewer; its Enter handler must not re-open the viewer
+// (that used to toggle full screen off and straight back on: a flicker).
+const viewerStage = tripItem?.closest('[tabindex="0"]');
+if (viewerStage) viewerStage.focus();
+const pressEnter = () =>
+  (document.activeElement && document.activeElement !== document.body ? document.activeElement : document).dispatchEvent(
+    new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })
+  );
+const fullScreenOpen = () => !!document.querySelector(".fixed.inset-0.bg-black");
+
+pressEnter();
+const enteredFull = await waitFor(() => fullScreenOpen(), 3000);
+assert(enteredFull, "Enter turns the viewer full screen");
+assert(
+  windowCalls.some((call) => call.op === "setFullScreen" && call.full === true),
+  "full screen is requested from the OS window, not just drawn inside the app"
+);
+
+pressEnter();
+const leftFull = await waitFor(() => !fullScreenOpen(), 3000);
+assert(leftFull, "Enter leaves full screen again");
+assert(
+  windowCalls.filter((call) => call.op === "setFullScreen").at(-1)?.full === false,
+  "leaving full screen restores the OS window"
+);
+assert(!!windowByTitle("trip-1.jpg"), "the viewer stays open after toggling full screen");
 
 document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
 const viewerClosed = await waitFor(() => !windowByTitle("trip-1.jpg"), 6000);

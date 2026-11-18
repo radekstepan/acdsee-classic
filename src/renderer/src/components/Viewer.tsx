@@ -5,6 +5,7 @@ import { useCommands } from "../commands";
 import { FORMATS } from "../data/catalog";
 import { formatBytes, formatDate, fullName } from "../utils/util";
 import { useElementSize } from "../utils/hooks";
+import { desktop } from "../lib/bridge";
 import { EditedImage } from "./EditedImage";
 import { Icon } from "./Icons";
 import { MenuBar, type MenuDef } from "./ui";
@@ -43,6 +44,23 @@ export function Viewer() {
     const t = setTimeout(() => setHint(false), 2600);
     return () => clearTimeout(t);
   }, [viewer.full, viewer.slideshow]);
+
+  /* Full screen is the real OS full screen, not just a full-window overlay,
+     so the desktop panel/taskbar and other windows get out of the way. */
+  useEffect(() => {
+    if (!app.desktopMode) return;
+    desktop().window.setFullScreen(viewer.full);
+    return () => desktop().window.setFullScreen(false);
+  }, [app.desktopMode, viewer.full]);
+
+  /* Stay in sync when the window manager leaves full screen on its own
+     (macOS Ctrl+Cmd+F, a WM shortcut, or the green traffic-light button). */
+  useEffect(() => {
+    if (!app.desktopMode) return;
+    return desktop().window.onFullScreenChange((full) => {
+      if (!full) app.patchViewer({ full: false });
+    });
+  }, [app.desktopMode, app.patchViewer]);
 
   /* ---------- geometry ---------- */
   const fw = Math.max(1, file?.w ?? 1);
@@ -145,6 +163,10 @@ export function Viewer() {
     if (["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)) return;
     const k = e.key;
     const ctrl = e.ctrlKey || e.metaKey;
+    // An open menu owns Enter, the arrows and Escape until it closes.
+    if (document.querySelector(".menu-popup")) return;
+    // Alt+letter belongs to the menu bar; only Alt+Enter (Properties) is ours.
+    if (e.altKey && k !== "Enter") return;
     const st = stageNode;
     if (k === "Escape") {
       e.preventDefault();
@@ -209,9 +231,16 @@ export function Viewer() {
     }
   };
   useEffect(() => {
-    const h = (e: KeyboardEvent) => kb.current(e);
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
+    // The viewer is its own window: claim its keys in the capture phase so the
+    // focused browser pane behind it does not act on the same key. Otherwise
+    // Enter exits full screen and immediately re-opens the viewer (a flicker
+    // that kept the app full screen).
+    const h = (e: KeyboardEvent) => {
+      kb.current(e);
+      if (e.defaultPrevented) e.stopPropagation();
+    };
+    document.addEventListener("keydown", h, true);
+    return () => document.removeEventListener("keydown", h, true);
   }, []);
 
   if (!file) return null;
