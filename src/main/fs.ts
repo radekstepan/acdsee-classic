@@ -2,7 +2,7 @@ import { execFile } from "child_process";
 import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
-import { app, ipcMain, nativeImage, shell } from "electron";
+import { app, ipcMain, nativeImage, shell, type NativeImage } from "electron";
 import { imageSizeFromFile } from "image-size/fromFile";
 import {
   VIRTUAL_ROOT,
@@ -178,6 +178,92 @@ function thumbCacheSet(key: string, value: string): void {
   thumbCache.set(key, value);
 }
 
+/** EXIF orientation tag (1-8) for display correction, 1 when absent. */
+async function readOrientation(fullPath: string): Promise<number> {
+  try {
+    const info = await imageSizeFromFile(fullPath);
+    const orientation = info.orientation ?? 1;
+    return orientation >= 1 && orientation <= 8 ? orientation : 1;
+  } catch {
+    return 1;
+  }
+}
+
+/**
+ * Rotate/flip raw 4-byte pixels from stored to displayed orientation.
+ * Pure (no Electron) so the mapping is unit-testable; orientations 5-8 swap
+ * width and height. Unknown orientations pass through untouched.
+ */
+export function orientPixels(
+  src: Buffer,
+  w: number,
+  h: number,
+  orientation: number
+): { data: Buffer; width: number; height: number } {
+  const identity = { data: src, width: w, height: h };
+  if (orientation < 2 || orientation > 8 || w <= 0 || h <= 0) return identity;
+  if (src.length < w * h * 4) return identity;
+  const swap = orientation >= 5;
+  const W = swap ? h : w;
+  const H = swap ? w : h;
+  const dst = Buffer.allocUnsafe(W * H * 4);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      let sx = x;
+      let sy = y;
+      switch (orientation) {
+        case 2:
+          sx = w - 1 - x;
+          break;
+        case 3:
+          sx = w - 1 - x;
+          sy = h - 1 - y;
+          break;
+        case 4:
+          sy = h - 1 - y;
+          break;
+        case 5:
+          sx = y;
+          sy = x;
+          break;
+        case 6:
+          sx = y;
+          sy = h - 1 - x;
+          break;
+        case 7:
+          sx = w - 1 - y;
+          sy = h - 1 - x;
+          break;
+        case 8:
+          sx = w - 1 - y;
+          sy = x;
+          break;
+      }
+      const s = (sy * w + sx) * 4;
+      const d = (y * W + x) * 4;
+      dst[d] = src[s];
+      dst[d + 1] = src[s + 1];
+      dst[d + 2] = src[s + 2];
+      dst[d + 3] = src[s + 3];
+    }
+  }
+  return { data: dst, width: W, height: H };
+}
+
+/** Counter-rotate a thumbnail bitmap into displayed orientation. */
+function orientThumbnail(image: NativeImage, orientation: number): NativeImage {
+  if (orientation < 2 || orientation > 8 || image.isEmpty()) return image;
+  try {
+    const { width, height } = image.getSize();
+    const bitmap = image.toBitmap();
+    const { data, width: W, height: H } = orientPixels(bitmap, width, height, orientation);
+    if (data === bitmap) return image;
+    return nativeImage.createFromBuffer(data, { width: W, height: H });
+  } catch {
+    return image;
+  }
+}
+
 async function makeThumb(fullPath: string, size: number): Promise<string | null> {
   const st = await safeStat(fullPath);
   if (!st) return null;
@@ -185,10 +271,14 @@ async function makeThumb(fullPath: string, size: number): Promise<string | null>
   const cached = thumbCacheGet(key);
   if (cached) return cached;
   try {
-    const image = await nativeImage.createThumbnailFromPath(fullPath, {
+    let image = await nativeImage.createThumbnailFromPath(fullPath, {
       width: size,
       height: size
     });
+    if (image.isEmpty()) return null;
+    // nativeImage ignores EXIF orientation, so without this a portrait shot
+    // comes back as a landscape bitmap (letterboxed in its portrait box).
+    image = orientThumbnail(image, await readOrientation(fullPath));
     if (image.isEmpty()) return null;
     const dataUrl = image.toDataURL();
     thumbCacheSet(key, dataUrl);
@@ -300,7 +390,14 @@ export function registerFsHandlers(): void {
     try {
       const info = await imageSizeFromFile(fullPath);
       if (!info.width || !info.height) return null;
-      return { width: info.width, height: info.height, format: (info.type ?? "").toUpperCase() };
+      // Browsers auto-apply the EXIF orientation when rendering, so a portrait
+      // shot stored as landscape (orientations 5-8) must report the displayed
+      // dimensions — otherwise thumbnails, preview and viewer stretch it.
+      const orientation = info.orientation ?? 1;
+      const swap = orientation >= 5 && orientation <= 8;
+      const width = swap ? info.height : info.width;
+      const height = swap ? info.width : info.height;
+      return { width, height, format: (info.type ?? "").toUpperCase() };
     } catch {
       return null;
     }

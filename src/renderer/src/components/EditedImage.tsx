@@ -66,7 +66,9 @@ export function EditedImage({ file, w, h, thumb, edit, style, className }: Props
           transform: editTransform(e),
           filter: editFilter(e),
           display: "block",
-          objectFit: "fill"
+          // Contain, not fill: the box already matches the photo's aspect, so
+          // this renders identically — but a dimension mismatch can never skew.
+          objectFit: "contain"
         }}
       />
     </div>

@@ -40,7 +40,7 @@ await esbuild.build({
 });
 
 const stub = await import("./electron-stub.mjs");
-const { registerFsHandlers } = await import(pathToFileURL(bundlePath).href);
+const { registerFsHandlers, orientPixels } = await import(pathToFileURL(bundlePath).href);
 registerFsHandlers();
 
 const invoke = async (channel, ...args) => {
@@ -86,12 +86,67 @@ assert(meta && meta.width > 0 && meta.height > 0 && meta.format === "JPG", `real
 const missingMeta = await invoke("acdsee:image-meta", path.join(fixture, "nope.jpg"));
 assert(missingMeta === null, "missing file meta is null");
 
+// Minimal EXIF-orientation JPEG: SOI + APP1 (EXIF orientation tag) + SOF0
+// declaring a stored 8x4 landscape frame + EOI. image-size only reads the
+// headers, so no scan data is needed. Browsers auto-rotate for display, so
+// orientations 5-8 must report the swapped (displayed) dimensions.
+const orientedJpeg = (orientation) =>
+  Buffer.from([
+    0xff, 0xd8,
+    0xff, 0xe1, 0x00, 0x22,
+    0x45, 0x78, 0x69, 0x66, 0x00, 0x00,
+    0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00,
+    0x01, 0x00,
+    0x12, 0x01, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00, orientation, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+    0xff, 0xc0, 0x00, 0x0b, 0x08, 0x00, 0x04, 0x00, 0x08, 0x01, 0x01, 0x11, 0x00,
+    0xff, 0xd9
+  ]);
+for (let orientation = 1; orientation <= 8; orientation++) {
+  const orientedPath = path.join(fixture, `orient-${orientation}.jpg`);
+  await fs.writeFile(orientedPath, orientedJpeg(orientation));
+  const orientedMeta = await invoke("acdsee:image-meta", orientedPath);
+  const swapped = orientation >= 5;
+  const expected = swapped ? "4x8" : "8x4";
+  assert(
+    orientedMeta?.width === (swapped ? 4 : 8) && orientedMeta?.height === (swapped ? 8 : 4),
+    `orientation ${orientation} reports displayed ${expected} dimensions (${orientedMeta?.width}x${orientedMeta?.height})`
+  );
+}
+
 const exif = await invoke("acdsee:exif", path.join(fixture, "a-lake.jpg"));
 assert(exif === null || typeof exif === "object", "exif does not throw");
 
 const thumbs = await invoke("acdsee:thumbs", [path.join(fixture, "a-lake.jpg"), path.join(fixture, "nope.jpg")], 192);
 assert(thumbs[0].dataUrl?.startsWith("data:image/"), "thumbnail data URL returned");
 assert(thumbs[1].dataUrl === null, "missing file thumbnail is null");
+assert(stub.createdThumbBuffers.length === 0, "orientation-1 thumbnails skip rotation");
+
+// nativeImage ignores EXIF, so the handler counter-rotates thumbnail pixels
+// into displayed orientation (checked here against hand-derived mappings).
+const px = (n) => [n, 0, 0, 0];
+const firsts = (buf) => [...buf.filter((_, i) => i % 4 === 0)].join("");
+const strip = Buffer.from([...px(1), ...px(2)]);
+for (const [o, W, H, order] of [
+  [1, 2, 1, "12"], [2, 2, 1, "21"], [3, 2, 1, "21"], [4, 2, 1, "12"],
+  [5, 1, 2, "12"], [6, 1, 2, "12"], [7, 1, 2, "21"], [8, 1, 2, "21"],
+  [0, 2, 1, "12"], [9, 2, 1, "12"]
+]) {
+  const r = orientPixels(strip, 2, 1, o);
+  assert(r.width === W && r.height === H && firsts(r.data) === order, `orientPixels o=${o} -> ${W}x${H} [${order}]`);
+}
+const square = Buffer.from([...px(1), ...px(2), ...px(3), ...px(4)]);
+for (const [o, order] of [[1, "1234"], [2, "2143"], [3, "4321"], [4, "3412"], [5, "1324"], [6, "3142"], [7, "4231"], [8, "2413"]]) {
+  const r = orientPixels(square, 2, 2, o);
+  assert(r.width === 2 && r.height === 2 && firsts(r.data) === order, `orientPixels 2x2 o=${o} -> [${order}]`);
+}
+assert(orientPixels(Buffer.from([1, 2]), 2, 1, 6).data.equals(Buffer.from([1, 2])), "short bitmaps pass through untouched");
+
+const orientedThumbs = await invoke("acdsee:thumbs", [path.join(fixture, "orient-6.jpg")], 192);
+assert(orientedThumbs[0].dataUrl?.includes("ROTATED-THUMB"), "oriented thumbnail goes through counter-rotation");
+const rotated = stub.createdThumbBuffers.at(-1);
+assert(rotated?.width === 1 && rotated?.height === 2, `rotated thumbnail swaps to portrait (${rotated?.width}x${rotated?.height})`);
+assert(rotated?.buffer.equals(stub.thumbPattern), "rotated thumbnail pixels match the 90 CW mapping");
 
 const pixel = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 const saved = await invoke("acdsee:save-data-url", fixture, "pixel.png", pixel);

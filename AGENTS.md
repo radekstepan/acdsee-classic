@@ -70,7 +70,9 @@ vendor/original-templates/  the two template zips this app was built from
   commands, menus and dialogs read the same store.
 - **Images:** full-size via the `local-file://file/<encoded-path>` protocol (with
   `Access-Control-Allow-Origin: *` so canvas convert/resize can read pixels);
-  thumbnails via `acdsee:thumbs` IPC (`nativeImage.createThumbnailFromPath`, LRU cached).
+  thumbnails via `acdsee:thumbs` IPC (`nativeImage.createThumbnailFromPath`
+  counter-rotated for EXIF orientation, LRU cached); `image-meta` reports
+  displayed (orientation-applied) dimensions.
   `FileEntry.src` = thumbnail, `FileEntry.fullSrc` = full image; components use
   `fullSrc || src`. `components/EditedImage.tsx` applies rotate/flip/filters.
 - **IDs:** real files/folders use absolute paths as ids, so rename/move/delete map
