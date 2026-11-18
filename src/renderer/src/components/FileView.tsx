@@ -293,12 +293,23 @@ export function FileView({ onContext, onOpen }: Props) {
     );
   };
 
+  /* ---- grid ---- */
+  /* Equal-width tracks that share the full row width, so the last column never
+     leaves a gap of dead space on the right of the file view. */
+  const tileGrid = (cell: number): CSSProperties => ({
+    display: "grid",
+    gridTemplateColumns: `repeat(auto-fill, minmax(${cell}px, 1fr))`,
+    justifyItems: "center",
+    alignContent: "start",
+    alignItems: "start"
+  });
+
   /* ---- thumbnails (grid) ---- */
   const thumbItem = (id: string, idx: number, strip = false) => {
     const folder = isFolder(id);
     const size = settings.thumbSize;
     const sel = isSel(id);
-    const cellW = size + 26;
+    const cellW = size + 20;
     let visual: ReactNode;
     if (folder) {
       const isz = size >= 128 ? 64 : size >= 80 ? 48 : 32;
@@ -492,8 +503,8 @@ export function FileView({ onContext, onOpen }: Props) {
         </div>
       )}
 
-      {viewMode === "thumbs" && <div className="flex flex-wrap content-start">{items.map((id, i) => thumbItem(id, i))}</div>}
-      {viewMode === "icons" && <div className="flex flex-wrap content-start">{items.map(iconItem)}</div>}
+      {viewMode === "thumbs" && <div style={tileGrid(settings.thumbSize + 20)}>{items.map((id, i) => thumbItem(id, i))}</div>}
+      {viewMode === "icons" && <div style={tileGrid(84)}>{items.map(iconItem)}</div>}
       {viewMode === "list" && (
         <div className="flex flex-col flex-wrap content-start" style={{ height: "100%" }}>
           {items.map(listItem)}
