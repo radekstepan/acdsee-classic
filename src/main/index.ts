@@ -91,8 +91,9 @@ function createWindow(): void {
     // Frameless: the app draws its own classic Win98-style title bar.
     frame: false,
     // Win98 chrome is square. Linux desktops that support client-side
-    // decorations round frameless windows, so opt out at the source.
-    ...(process.platform === "linux" ? { roundedCorners: false } : {}),
+    // decorations round frameless windows, and so does macOS, so opt out
+    // at the source on both.
+    ...(process.platform === "linux" || process.platform === "darwin" ? { roundedCorners: false } : {}),
     backgroundColor: "#c3c3c3",
     show: false,
     autoHideMenuBar: true,
