@@ -6,6 +6,7 @@ import { registerFsHandlers } from "./fs";
 import { stateDir, stateFile } from "./state";
 
 let mainWindow: BrowserWindow | null = null;
+let splashWindow: BrowserWindow | null = null;
 
 type WindowState = {
   width: number;
@@ -78,6 +79,94 @@ function appIconPath(): string {
     : join(app.getAppPath(), "resources", "icon.png");
 }
 
+/**
+ * Instant splash screen. The main window stays hidden until the ~1MB renderer
+ * bundle boots and the first folder listing resolves, so show a static
+ * About-style splash (logo + crawling progress bar) from the main process —
+ * it paints immediately instead of waiting on the renderer.
+ */
+function splashIconDataUrl(): string {
+  const candidates = app.isPackaged
+    ? [join(process.resourcesPath, "splash-icon.png")]
+    : [join(app.getAppPath(), "src", "renderer", "src", "assets", "app-icon.png")];
+  for (const candidate of candidates) {
+    try {
+      return `data:image/png;base64,${readFileSync(candidate).toString("base64")}`;
+    } catch {
+      /* Missing artwork must never block startup. */
+    }
+  }
+  return "";
+}
+
+function splashHtml(): string {
+  const icon = splashIconDataUrl();
+  const art = icon
+    ? `<div class="logo"><img src="${icon}" width="96" height="96" alt="" /></div>`
+    : `<div class="logo logo-missing">ACDSee</div>`;
+  return `<!doctype html>
+<html><head><meta charset="utf-8" /></head><body><div class="frame"><div class="inner">
+${art}
+<div class="title">ACDSee Classic 3.1</div>
+<div class="sub">Image Browser and Viewer</div>
+<div class="spacer"></div>
+<div class="status">Loading your image library&hellip;</div>
+<div class="bar"><i></i></div>
+</div></div><style>
+html,body{margin:0;height:100%;overflow:hidden}
+body{background:#c0c0c0;color:#000;font-family:"MS Sans Serif",Tahoma,Verdana,Arial,sans-serif;font-size:11px;cursor:default;-webkit-user-select:none;user-select:none}
+.frame{box-sizing:border-box;height:100%;padding:2px}
+.inner{box-sizing:border-box;height:100%;padding:20px 24px 18px;display:flex;flex-direction:column;align-items:center;background:#c0c0c0;box-shadow:inset -1px -1px 0 #0a0a0a,inset 1px 1px 0 #fff,inset -2px -2px 0 #808080,inset 2px 2px 0 #dfdfdf}
+.logo{background:#fff;padding:12px;border:1px solid;border-color:#808080 #fff #fff #808080}
+.logo img{display:block}
+.logo-missing{font-weight:bold;font-size:13px;padding:40px 30px}
+.title{margin-top:14px;font-size:16px;font-weight:bold}
+.sub{margin-top:3px}
+.spacer{flex:1;min-height:14px}
+.status{margin-bottom:6px;color:#404040}
+.bar{box-sizing:border-box;width:100%;height:18px;background:#fff;border:1px solid;border-color:#808080 #fff #fff #808080;padding:2px}
+.bar i{display:block;height:100%;background:repeating-linear-gradient(90deg,#000080 0 8px,rgba(0,0,128,0) 8px 10px);animation:crawl 0.8s linear infinite}
+@keyframes crawl{to{background-position:10px 0}}
+</style></body></html>`;
+}
+
+function showSplash(): void {
+  splashWindow = new BrowserWindow({
+    width: 440,
+    height: 340,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    center: true,
+    frame: false,
+    ...(process.platform === "linux" || process.platform === "darwin" ? { roundedCorners: false } : {}),
+    backgroundColor: "#c0c0c0",
+    show: false,
+    autoHideMenuBar: true,
+    webPreferences: {
+      sandbox: true,
+      contextIsolation: true
+    }
+  });
+  void splashWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(splashHtml())}`);
+  splashWindow.once("ready-to-show", () => splashWindow?.show());
+  // Failsafe: a stuck splash must never trap the user.
+  setTimeout(() => {
+    if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close();
+    splashWindow = null;
+  }, 20000);
+}
+
+function hideSplashSoon(): void {
+  setTimeout(() => {
+    if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close();
+    splashWindow = null;
+  }, 300);
+}
+
 function createWindow(): void {
   const saved = loadWindowState();
   const bounds = restoreBounds(saved);
@@ -107,6 +196,7 @@ function createWindow(): void {
   mainWindow.on("ready-to-show", () => {
     if (saved.maximized) mainWindow?.maximize();
     mainWindow?.show();
+    hideSplashSoon();
   });
 
   mainWindow.on("resize", saveWindowStateSoon);
@@ -209,6 +299,7 @@ void app.whenReady().then(() => {
   registerWindowControls();
   registerFsHandlers();
   setupMenu();
+  showSplash();
   createWindow();
 
   app.on("activate", () => {

@@ -25,7 +25,7 @@ Opening the `electron-vite dev` renderer URL in a plain browser runs the app in
 ```
 src/
   main/        Electron main: window, local-file:// protocol, IPC handlers
-    index.ts   app lifecycle, frameless window, protocol with CORS headers
+    index.ts   app lifecycle, frameless window, instant splash screen, protocol with CORS headers
     fs.ts      all acdsee:* filesystem/image handlers (registerFsHandlers)
     state.ts   ~/.acdsee path helper for remembered state + window geometry
   preload/     contextBridge exposing window.acdsee (see src/shared/api.ts)
