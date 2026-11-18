@@ -21,7 +21,18 @@ const dom = new JSDOM(source, {
   resources: "usable",
   runScripts: "dangerously",
   pretendToBeVisual: true,
-  virtualConsole
+  virtualConsole,
+  beforeParse(window) {
+    // jsdom has no ResizeObserver; the classic panes use it for fit-to-window previews.
+    window.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+    window.requestAnimationFrame = (cb) => window.setTimeout(() => cb(Date.now()), 16);
+    window.cancelAnimationFrame = (id) => window.clearTimeout(id);
+    window.HTMLElement.prototype.scrollIntoView = () => {};
+  }
 });
 
 async function buildInlineHtml() {
@@ -48,33 +59,41 @@ const deadline = Date.now() + 15000;
 let booted = false;
 while (Date.now() < deadline) {
   await new Promise((resolve) => setTimeout(resolve, 200));
-  if (document.querySelector(".menubar")) {
+  if (document.querySelector(".menubar-item")) {
     booted = true;
     break;
   }
 }
-if (!booted) failures.push("app did not render .menubar within 15s");
+if (!booted) failures.push("app did not render the classic window within 15s");
 
 const assert = (condition, message) => {
   if (!condition) failures.push(message);
   else console.log(`ok - ${message}`);
 };
 
-assert(document.querySelector(".main-titlebar"), "classic title bar renders");
+assert(document.querySelector(".window98"), "classic Win98 window frame renders");
 assert(
-  document.querySelector(".titlebar-text")?.textContent?.includes("ACDSee Classic"),
-  `title bar caption is classic ("${document.querySelector(".titlebar-text")?.textContent}")`
+  document.querySelector(".title-bar-text")?.textContent?.includes("ACDSee"),
+  `title bar caption is classic ("${document.querySelector(".title-bar-text")?.textContent}")`
 );
-const menuLabels = [...document.querySelectorAll(".menu-title")].map((el) => el.textContent);
-for (const label of ["File", "Edit", "View", "Tools", "Browser", "Image", "Help"]) {
+const menuLabels = [...document.querySelectorAll(".menubar-item")].map((el) => el.textContent);
+for (const label of ["File", "Edit", "View", "Tools", "Help"]) {
   assert(menuLabels.includes(label), `menu "${label}" present`);
 }
-assert(document.querySelectorAll(".tb-button").length >= 20, `toolbar buttons render (${document.querySelectorAll(".tb-button").length})`);
-assert(document.querySelector(".tree-pane"), "folder tree pane renders");
-assert(document.querySelector(".inspector-pane"), "preview pane renders");
-assert(document.querySelector(".statusbar"), "status bar renders");
-assert(document.querySelectorAll(".thumb").length > 5, `thumbnails render (${document.querySelectorAll(".thumb").length})`);
-assert(document.querySelector(".location-path"), "location path bar renders");
+assert(
+  document.querySelectorAll(".tb-btn").length >= 10,
+  `toolbar buttons render (${document.querySelectorAll(".tb-btn").length})`
+);
+assert(document.querySelector(".tv"), "folder tree pane renders");
+assert(document.querySelector(".tv-label")?.textContent === "Desktop", "folder tree starts at the desktop");
+assert(document.querySelectorAll(".status-panel").length >= 3, "classic status bar renders");
+assert(
+  document.querySelectorAll("[data-id]").length > 5,
+  `thumbnails render (${document.querySelectorAll("[data-id]").length})`
+);
+assert(document.querySelector(".file-label"), "file labels render");
+assert(document.querySelector(".taskbar"), "taskbar renders");
+assert(document.querySelector("[data-tip]"), "classic tooltips are wired");
 
 const fatal = errors.filter((message) => !/Could not load img|Could not load link/i.test(message));
 if (fatal.length) failures.push(`page errors:\n  - ${fatal.slice(0, 8).join("\n  - ")}`);
@@ -84,4 +103,4 @@ if (failures.length) {
   console.error(`\nSMOKE FAIL (${failures.length}):\n- ${failures.join("\n- ")}`);
   process.exit(1);
 }
-console.log("\nSMOKE PASS: classic browser UI renders in demo mode.");
+console.log("\nSMOKE PASS: classic ACDSee UI renders in demo mode.");

@@ -13,7 +13,7 @@ Electron + React 19 + TypeScript + Tailwind 4. Package manager is **yarn 4**
 | `yarn dev` | Run the desktop app with hot reload |
 | `yarn typecheck` | `tsc --noEmit` on main+preload and renderer projects |
 | `yarn build` | Typecheck + electron-vite production build into `out/` |
-| `yarn test` | Build, then renderer smoke test + main-process IPC tests |
+| `yarn test` | Build, then demo + desktop renderer tests + main-process IPC tests |
 | `yarn dist:mac` / `dist:win` / `dist:linux` | Build + package installer into `release/` |
 | `yarn changeset` / `yarn version-packages` | Changeset workflow |
 
@@ -32,43 +32,59 @@ src/
   renderer/    React app (electron-vite renderer root)
     index.html
     src/
-      App.tsx        browser state + all classic chrome (menus, toolbars, panes)
-      data.ts        Folder/Photo model + pure helpers over a runtime store
+      App.tsx        Win98 desktop shell: windows, taskbar, Start menu, splash
+      store.tsx      single app store: real folders/files, selection, viewer, dialogs
+      types.ts       Folder/FileEntry/Settings/DialogSpec model
+      commands.tsx   menus, toolbar commands, context menus
+      shell.tsx      close/minimize/run-command bridge for the desktop shell
+      data/fs.ts     initial shell, settings, file-entry helpers
+      data/catalog.ts image formats + bundled demo-photo list
       demo-data.ts   static sample library for browser/demo mode
       lib/bridge.ts  isDesktop()/desktop() accessors, platform labels
       lib/imaging.ts canvas convert/resize (no native deps)
-      app.css        desktop shell overrides (drag region, boot splash)
-      components/    BrowserView, Panels, Viewer, MenuBar, Dialogs, icons
-      index.css      classic Win98/ACDSee theme (from the template, keep intact)
+      app.css        frameless-window drag regions
+      components/    Browser, FileView, FolderTree, PreviewPane, Viewer,
+                     Toolbar, Taskbar, Splash, EditedImage, Icons, ui
+      components/dialogs/  Basic, Tools, DialogHost (classic modal dialogs)
+      index.css      classic Win98/ACDSee theme (keep intact)
     public/photos/   demo-mode sample images (also shipped in the app bundle)
 tests/
-  smoke.mjs    boots the built renderer in jsdom, asserts the classic UI renders
-  ipc.mjs      bundles src/main/fs.ts with electron stubbed, tests handlers on real files
+  smoke.mjs            boots the built renderer in jsdom (demo mode)
+  renderer-desktop.mjs boots it with a mocked window.acdsee and real-path fixtures
+  ipc.mjs              bundles src/main/fs.ts with electron stubbed, tests handlers on real files
 resources/     icon.png/icon.icns/icon.ico (+ icon-src.png master art)
 vendor/original-templates/  the two template zips this app was built from
 ```
 
 ## Architecture notes
 
-- **No Shell.** The template simulated a whole Windows 98 desktop; the app ships
-  only the ACDSee browser window itself, frameless (`frame: false`), with the
-  classic title bar as the drag region (`-webkit-app-region`, see `app.css`).
-- **Data flow:** `App.tsx` owns `folders` + `photoCache` state and syncs them into
-  `data.ts` via `setRuntimeLibrary()` every render, so the template's pure helpers
-  (`folderById`, `childFolders`, `folderPathString`, …) keep working for all components.
+- **Desktop shell.** The UI is the classic Win98 desktop from the design package:
+  teal wallpaper, desktop icons, taskbar/Start menu, splash screen and simulated
+  ACDSee browser + viewer windows. The Electron window stays frameless; the empty
+  desktop is the native drag surface (`app.css`).
+- **Data flow:** `store.tsx` is the single source of truth (`useApp()`). It owns
+  `folders`, selection, settings, viewer state and the dialog stack. Folder/files
+  are loaded lazily from `window.acdsee` (listRoots → listChildren/listDir), while
+  commands, menus and dialogs read the same store.
 - **Images:** full-size via the `local-file://file/<encoded-path>` protocol (with
   `Access-Control-Allow-Origin: *` so canvas convert/resize can read pixels);
   thumbnails via `acdsee:thumbs` IPC (`nativeImage.createThumbnailFromPath`, LRU cached).
-  `Photo.src` = thumbnail, `Photo.fullSrc` = full image; components use `fullSrc || src`.
-- **IDs:** real folders/photos use absolute paths as ids; `__computer__` is the only
-  virtual node. Demo mode uses template string ids with `path: ""`.
+  `FileEntry.src` = thumbnail, `FileEntry.fullSrc` = full image; components use
+  `fullSrc || src`. `components/EditedImage.tsx` applies rotate/flip/filters.
+- **IDs:** real files/folders use absolute paths as ids, so rename/move/delete map
+  1:1 to disk. Virtual nodes use `__` ids: `__computer__`, `__pictures__`,
+  `__documents__`, `__desktopdir__`, `__network__`, `recycle`, `desktop`.
+  Demo mode uses stable synthetic ids with `path: ""`.
+- **Real operations:** trash, copy/move, rename, new folder, convert/resize,
+  print, wallpaper and open/show-in-folder all go through `src/shared/api.ts`.
+  Find walks the real tree via `listDir`; conversions use canvas + `saveDataUrl`.
 - **Imaging without native deps:** dimensions via `image-size`, EXIF via `exifr`,
   convert/resize via canvas + `saveDataUrl`. Both libs are **bundled into main**
   (`exclude` in `electron.vite.config.ts`) because the packaged app ships no
   `node_modules` — `tests/ipc.mjs` asserts this stays true.
 - **Preload output is ESM** (`out/preload/index.mjs`); keep `src/main/index.ts` in sync.
-- **Rotate/flip/rating** are in-memory view state carried across folder reloads by
-  photo id; they never modify files on disk.
+- **Rotate/flip/brightness/adjust** are in-memory view state carried across folder
+  reloads by file id; they never modify files on disk. Convert/resize save new files.
 
 ## Conventions for changes
 

@@ -75,6 +75,9 @@ assert(listing.folders.length === 1 && listing.folders[0].name === "sub", "subfo
 assert(listing.files.length === 3, `three images listed, junk ignored (${listing.files.map((f) => f.name).join(", ")})`);
 assert(listing.files.every((f) => f.size > 0 && f.mtimeMs > 0), "stat fields populated");
 
+const hiddenListing = await invoke("acdsee:list-dir", fixture, true);
+assert(hiddenListing.files.some((f) => f.name === ".hidden.jpg"), "includeHidden lists dot files");
+
 const sub = await invoke("acdsee:list-dir", path.join(fixture, "sub"));
 assert(sub.files.length === 1 && sub.parent === fixture, "nested folder + parent link");
 
@@ -100,6 +103,16 @@ assert(savedAgain !== saved, "name clash gets a unique suffix");
 const newDir = path.join(fixture, "fresh");
 await fs.mkdir(newDir);
 
+const createdDir = await invoke("acdsee:create-folder", fixture, "New Folder");
+assert(createdDir === path.join(fixture, "New Folder") && (await fs.stat(createdDir)).isDirectory(), "create-folder works");
+let rejected = false;
+try {
+  await invoke("acdsee:create-folder", fixture, "../escape");
+} catch {
+  rejected = true;
+}
+assert(rejected, "create-folder rejects path traversal");
+
 const renamed = await invoke("acdsee:rename", path.join(fixture, "b-picnic.jpg"), "b-renamed.jpg");
 assert(path.basename(renamed) === "b-renamed.jpg", "rename works");
 
@@ -115,6 +128,10 @@ assert(stub.trashed.length === 1, "trash delegates to shell");
 await invoke("acdsee:open-path", path.join(fixture, "notes.txt"));
 await invoke("acdsee:show-in-folder", path.join(fixture, "notes.txt"));
 assert(stub.opened.length === 1 && stub.shownInFolder.length === 1, "open/show-in-folder delegate to shell");
+
+const openedBefore = stub.opened.length;
+await invoke("acdsee:open-trash");
+assert(stub.opened.length === openedBefore + 1, "open-trash delegates to the platform trash location");
 
 // Channel parity: every channel the preload calls must have a main handler.
 const preloadSource = await fs.readFile(path.join(root, "out", "preload", "index.mjs"), "utf8");

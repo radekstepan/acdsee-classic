@@ -237,7 +237,7 @@ export function registerFsHandlers(getMainWindow: () => BrowserWindow | null): v
     return listSubfolders(id, id);
   });
 
-  ipcMain.handle("acdsee:list-dir", async (_event, dirPath: string): Promise<ListDirResult> => {
+  ipcMain.handle("acdsee:list-dir", async (_event, dirPath: string, includeHidden = false): Promise<ListDirResult> => {
     let entries;
     try {
       entries = await fs.readdir(dirPath, { withFileTypes: true });
@@ -248,7 +248,8 @@ export function registerFsHandlers(getMainWindow: () => BrowserWindow | null): v
     const files: DirEntry[] = [];
     await Promise.all(
       entries.map(async (entry) => {
-        if (entry.name.startsWith(".") || HIDDEN_DIR_NAMES.has(entry.name)) return;
+        if (entry.name.startsWith(".") && !includeHidden) return;
+        if (HIDDEN_DIR_NAMES.has(entry.name) && !includeHidden) return;
         const full = path.join(dirPath, entry.name);
         const st = await safeStat(full);
         if (!st) return;
@@ -340,6 +341,16 @@ export function registerFsHandlers(getMainWindow: () => BrowserWindow | null): v
     }
   );
 
+  ipcMain.handle("acdsee:create-folder", async (_event, parentDir: string, name: string): Promise<string> => {
+    const clean = name.trim();
+    if (!clean || clean === "." || clean === ".." || /[\\/]/.test(clean)) {
+      throw new Error("Invalid folder name");
+    }
+    const target = await uniqueTargetPath(parentDir, clean);
+    await fs.mkdir(target, { recursive: false });
+    return target;
+  });
+
   ipcMain.handle("acdsee:rename", async (_event, fullPath: string, newName: string): Promise<string> => {
     const target = path.join(path.dirname(fullPath), newName);
     await fs.rename(fullPath, target);
@@ -362,7 +373,14 @@ export function registerFsHandlers(getMainWindow: () => BrowserWindow | null): v
   ipcMain.handle("acdsee:move-to", async (_event, paths: string[], targetDir: string): Promise<void> => {
     for (const p of paths) {
       const target = await uniqueTargetPath(targetDir, path.basename(p));
-      await fs.rename(p, target);
+      try {
+        await fs.rename(p, target);
+      } catch (error) {
+        // Moving across filesystems (e.g. to a USB drive) needs a copy + unlink.
+        if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
+        await fs.cp(p, target, { recursive: true });
+        await fs.rm(p, { recursive: true, force: true });
+      }
     }
   });
 
@@ -372,6 +390,35 @@ export function registerFsHandlers(getMainWindow: () => BrowserWindow | null): v
 
   ipcMain.handle("acdsee:show-in-folder", async (_event, fullPath: string): Promise<void> => {
     shell.showItemInFolder(fullPath);
+  });
+
+  ipcMain.handle("acdsee:open-trash", async (): Promise<void> => {
+    if (process.platform === "darwin") {
+      await shell.openPath(path.join(os.homedir(), ".Trash"));
+      return;
+    }
+    if (process.platform === "win32") {
+      await new Promise<void>((resolvePromise, rejectPromise) => {
+        execFile("explorer.exe", ["shell:RecycleBinFolder"], (error) =>
+          error ? rejectPromise(error) : resolvePromise()
+        );
+      });
+      return;
+    }
+    const candidates = [
+      path.join(os.homedir(), ".local", "share", "Trash", "files"),
+      path.join(os.homedir(), ".local", "share", "Trash")
+    ];
+    for (const candidate of candidates) {
+      try {
+        await fs.access(candidate);
+        await shell.openPath(candidate);
+        return;
+      } catch {
+        // try the next candidate
+      }
+    }
+    await shell.openPath(os.homedir());
   });
 
   ipcMain.handle(

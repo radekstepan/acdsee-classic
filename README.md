@@ -8,12 +8,14 @@ browsing your **real** photo folders.
 
 ## Features
 
-- Classic three-pane browser: folder tree, thumbnails/list/details stage, preview pane
+- Classic Win98 desktop shell: taskbar and Start menu, boot splash, draggable
+  browser/viewer windows, menus, toolbars, split panes and modal dialogs
 - Real filesystem browsing with fast cached thumbnails, lazy dimensions + EXIF
-- Image viewer with zoom, filmstrip, and slide show
-- Real file operations: copy/move/rename/rename-series, trash, copy to folder
+- Image viewer with zoom, pan, filmstrip, full-screen and slide show
+- Real file operations: copy/move/rename/batch-rename, new folder, trash,
+  copy to folder, open-with-default-app, show-in-folder
 - Real convert (JPEG/PNG/WebP + quality) and resize, done locally with canvas
-- Real "Set as Wallpaper", print, open-with-default-app, show-in-folder
+- Real "Set as Wallpaper", print, and recursive Find across folders
 - Full keyboard support (F2 rename, Del, F5 refresh, Alt+Enter properties, …)
 - Demo mode: open the dev renderer URL in any browser to click through a sample library
 
@@ -26,9 +28,13 @@ browsing your **real** photo folders.
 ```sh
 yarn install
 yarn dev        # launch the desktop app with hot reload
-yarn test       # typecheck-safe build + smoke and IPC tests
+yarn test       # typecheck-safe build + smoke, desktop-mode and IPC tests
 yarn typecheck  # TS only
 ```
+
+The desktop-mode renderer test (`yarn test:renderer-desktop`) boots the built UI
+in jsdom with a mocked `window.acdsee` bridge, so it exercises the real-path
+store without launching Electron.
 
 ## Package
 

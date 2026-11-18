@@ -13,7 +13,8 @@
     "build": "yarn typecheck && electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "preview": "electron-vite preview",
-    "test": "yarn build && node ./tests/smoke.mjs && node --import ./tests/electron-hooks.mjs ./tests/ipc.mjs",
+    "test": "yarn build && node ./tests/smoke.mjs && node ./tests/renderer-desktop.mjs && node --import ./tests/electron-hooks.mjs ./tests/ipc.mjs",
+    "test:renderer-desktop": "node ./tests/renderer-desktop.mjs",
     "dist": "yarn build && electron-builder",
     "dist:mac": "yarn build && electron-builder --mac",
     "dist:win": "yarn build && electron-builder --win",
@@ -71,6 +72,7 @@
     },
     "linux": {
       "category": "Graphics",
+      "maintainer": "ACDSee Classic contributors <acdsee-classic@users.noreply.github.com>",
       "target": [
         "AppImage",
         "deb"

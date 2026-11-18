@@ -6,13 +6,16 @@ const api: AcdseeApi = {
   systemPaths: () => ipcRenderer.invoke("acdsee:system-paths"),
   listRoots: () => ipcRenderer.invoke("acdsee:list-roots"),
   listChildren: (id: string) => ipcRenderer.invoke("acdsee:list-children", id),
-  listDir: (path: string) => ipcRenderer.invoke("acdsee:list-dir", path),
+  listDir: (path: string, includeHidden?: boolean) =>
+    ipcRenderer.invoke("acdsee:list-dir", path, includeHidden),
   thumbs: (paths: string[], size: number) =>
     ipcRenderer.invoke("acdsee:thumbs", paths, size),
   imageMeta: (path: string) => ipcRenderer.invoke("acdsee:image-meta", path),
   exif: (path: string) => ipcRenderer.invoke("acdsee:exif", path),
   saveDataUrl: (targetDir: string, fileName: string, dataUrl: string) =>
     ipcRenderer.invoke("acdsee:save-data-url", targetDir, fileName, dataUrl),
+  createFolder: (parentDir: string, name: string) =>
+    ipcRenderer.invoke("acdsee:create-folder", parentDir, name),
   rename: (path: string, newName: string) =>
     ipcRenderer.invoke("acdsee:rename", path, newName),
   trash: (paths: string[]) => ipcRenderer.invoke("acdsee:trash", paths),
@@ -22,6 +25,7 @@ const api: AcdseeApi = {
     ipcRenderer.invoke("acdsee:move-to", paths, targetDir),
   openPath: (path: string) => ipcRenderer.invoke("acdsee:open-path", path),
   showInFolder: (path: string) => ipcRenderer.invoke("acdsee:show-in-folder", path),
+  openTrash: () => ipcRenderer.invoke("acdsee:open-trash"),
   setWallpaper: (path: string) => ipcRenderer.invoke("acdsee:set-wallpaper", path),
   printImage: (path: string) => ipcRenderer.invoke("acdsee:print-image", path),
   window: {

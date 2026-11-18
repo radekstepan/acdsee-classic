@@ -82,7 +82,7 @@ export type AcdseeApi = {
   /** Child folders of a tree node id (virtual root id or real folder path). */
   listChildren: (id: string) => Promise<FolderNode[]>;
   /** Folder contents for the file stage. */
-  listDir: (path: string) => Promise<ListDirResult>;
+  listDir: (path: string, includeHidden?: boolean) => Promise<ListDirResult>;
   /** Thumbnails as JPEG data URLs. Returns null per path when unavailable. */
   thumbs: (paths: string[], size: number) => Promise<ThumbResult[]>;
   /** Pixel dimensions + detected format, without decoding the whole file. */
@@ -91,12 +91,14 @@ export type AcdseeApi = {
   exif: (path: string) => Promise<ExifInfo | null>;
   /** Save a data URL to disk (used by Convert / Resize). */
   saveDataUrl: (targetDir: string, fileName: string, dataUrl: string) => Promise<string>;
+  createFolder: (parentDir: string, name: string) => Promise<string>;
   rename: (path: string, newName: string) => Promise<string>;
   trash: (paths: string[]) => Promise<void>;
   copyTo: (paths: string[], targetDir: string) => Promise<void>;
   moveTo: (paths: string[], targetDir: string) => Promise<void>;
   openPath: (path: string) => Promise<void>;
   showInFolder: (path: string) => Promise<void>;
+  openTrash: () => Promise<void>;
   setWallpaper: (path: string) => Promise<{ ok: boolean; message: string }>;
   printImage: (path: string) => Promise<void>;
   window: {
