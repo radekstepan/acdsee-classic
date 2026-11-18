@@ -6,8 +6,6 @@ A cross-platform love letter to the classic ACDSee 3.x image browser — the Win
 chrome, menus, and workflow, running natively on **macOS, Windows, and Linux** and
 browsing your **real** photo folders.
 
-![ACDSee Classic icon](resources/icon.png)
-
 ## Features
 
 - Classic Win98 ACDSee chrome: full-window browser and viewer frames, menus,
