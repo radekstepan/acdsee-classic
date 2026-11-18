@@ -27,7 +27,6 @@ const api: AcdseeApi = {
   showInFolder: (path: string) => ipcRenderer.invoke("acdsee:show-in-folder", path),
   openTrash: () => ipcRenderer.invoke("acdsee:open-trash"),
   setWallpaper: (path: string) => ipcRenderer.invoke("acdsee:set-wallpaper", path),
-  printImage: (path: string) => ipcRenderer.invoke("acdsee:print-image", path),
   window: {
     minimize: () => ipcRenderer.send("acdsee:window-minimize"),
     toggleMaximize: () => ipcRenderer.send("acdsee:window-toggle-maximize"),

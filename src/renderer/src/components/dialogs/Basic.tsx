@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../../store";
 import { FORMAT_LIST, FORMATS } from "../../data/catalog";
-import { Button, Check, Dialog, DialogButtons, GroupBox, Mn, Progress, Radio, Tabs } from "../ui";
+import { Button, Check, Dialog, DialogButtons, GroupBox, Mn, Radio, Tabs } from "../ui";
 import { Icon } from "../Icons";
 import { EditedImage } from "../EditedImage";
 import { cameraInfo, dosName, fitBox, formatBytes, formatDate, formatLongDate, formatNumber, fullName, pathOf, typeName } from "../../utils/util";
@@ -375,7 +375,7 @@ const TIPS = [
   "Press F2 to rename the selected file, or select several files and press F2 for the Batch Rename dialog.",
   "In the Viewer, press the Enter key to switch to full-screen mode. Left-click advances, right-click goes back.",
   "Use Ctrl+L and Ctrl+R to rotate the selected images. The thumbnails update immediately.",
-  "Use Tools ▸ Find Files (F3) to search every folder by name, type, date or file size.",
+  "Choose View ▸ Icons or View ▸ List to change how the current folder is laid out.",
   "Choose View ▸ Filmstrip to see a large preview of the current image above a strip of thumbnails.",
   "Right-click the desktop wallpaper menu entries to Center, Tile or Stretch an image. Minimize ACDSee to see the result.",
   "Press Space in a slide show to pause. Press Esc to stop.",
@@ -478,179 +478,6 @@ export function NewFolderDialog({ parent }: { parent: string }) {
       <DialogButtons>
         <Button def onClick={ok}>
           OK
-        </Button>
-        <Button onClick={app.closeDialog}>Cancel</Button>
-      </DialogButtons>
-    </Dialog>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-export function PrintDialog({ ids }: { ids: string[] }) {
-  const app = useApp();
-  const files = ids.map((i) => app.getFile(i)).filter(Boolean) as FileEntry[];
-  const [printer, setPrinter] = useState("HP LaserJet 4L");
-  const [copies, setCopies] = useState(1);
-  const [layout, setLayout] = useState<"full" | "two" | "sheet">("full");
-  const [names, setNames] = useState(true);
-  const [prog, setProg] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (prog === null) return;
-    if (prog >= 100) {
-      const t = setTimeout(() => {
-        void app.printFiles(ids).then(() => {
-          app.closeDialog();
-          app.msg("ACDSee", `${files.length} image${files.length > 1 ? "s were" : " was"} sent to ${printer}.`, "info");
-        });
-      }, 300);
-      return () => clearTimeout(t);
-    }
-    const t = setTimeout(() => setProg(prog + 8), 90);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prog]);
-
-  const cols = layout === "full" ? 1 : layout === "two" ? 1 : 4;
-  const rows = layout === "full" ? 1 : layout === "two" ? 2 : 5;
-  const cells = Array.from({ length: cols * rows });
-
-  if (prog !== null) {
-    return (
-      <Dialog title="Printing" icon="print" width={320} onClose={() => {}} noClose>
-        <div className="p-2 flex flex-col gap-2">
-          <div>Printing {files.length} image(s) on {printer}...</div>
-          <Progress value={prog} />
-          <div className="flex justify-center pt-1">
-            <Button onClick={app.closeDialog}>Cancel</Button>
-          </div>
-        </div>
-      </Dialog>
-    );
-  }
-  return (
-    <Dialog title="Print" icon="print" width={430} onClose={app.closeDialog} onEnter={() => setProg(0)}>
-      <div className="flex gap-3">
-        <div className="flex-1 flex flex-col gap-2">
-          <GroupBox title="Printer">
-            <div className="flex items-center gap-2">
-              <label className="w-[40px]">Name:</label>
-              <select className="field flex-1" value={printer} onChange={(e) => setPrinter(e.target.value)}>
-                <option>HP LaserJet 4L</option>
-                <option>Epson Stylus Color 600</option>
-                <option>Canon BJC-4300</option>
-                <option>Microsoft Fax</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-2 mt-1.5 text-[#404040]">
-              <label className="w-[40px]">Status:</label> Ready — on LPT1:
-            </div>
-          </GroupBox>
-          <GroupBox title="Layout">
-            <div className="flex flex-col gap-1.5">
-              <Radio name="lay" label="&Full page" checked={layout === "full"} onChange={() => setLayout("full")} />
-              <Radio name="lay" label="&Two per page" checked={layout === "two"} onChange={() => setLayout("two")} />
-              <Radio name="lay" label="&Contact sheet (4 x 5)" checked={layout === "sheet"} onChange={() => setLayout("sheet")} />
-            </div>
-          </GroupBox>
-          <div className="flex items-center gap-2 pl-1">
-            <label>
-              <Mn text="Number of &copies:" />
-            </label>
-            <input type="number" min={1} max={99} className="field !w-[52px]" value={copies} onChange={(e) => setCopies(Math.max(1, Number(e.target.value) || 1))} />
-          </div>
-          <Check className="pl-1" label="Print file &names" checked={names} onChange={setNames} />
-        </div>
-        <div className="flex-none w-[120px] flex flex-col items-center pt-1">
-          <div className="bg-white p-1.5 grid gap-1" style={{ width: 96, height: 124, gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)`, boxShadow: "1px 1px 0 1px #404040, 0 0 0 1px #808080" }}>
-            {cells.map((_, i) => {
-              const f = files[i % files.length];
-              return (
-                <div key={i} className="overflow-hidden flex items-center justify-center bg-[#e8e8e8]">
-                  {f && <img src={f.src || f.fullSrc} alt="" className="max-w-full max-h-full object-contain" />}
-                </div>
-              );
-            })}
-          </div>
-          <div className="pt-1 text-[#404040]">{files.length} image(s)</div>
-        </div>
-      </div>
-      <DialogButtons>
-        <Button def onClick={() => setProg(0)}>
-          OK
-        </Button>
-        <Button onClick={app.closeDialog}>Cancel</Button>
-      </DialogButtons>
-    </Dialog>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-export function AcquireDialog() {
-  const app = useApp();
-  const [src, setSrc] = useState(0);
-  const [prog, setProg] = useState<number | null>(null);
-  const sources = ["Kodak DC210 Zoom Digital Camera (TWAIN)", "HP ScanJet 4c / 5p (TWAIN)", "Microsoft WIA-Compatible Scanner", "UMAX Astra 1220S (TWAIN)"];
-
-  useEffect(() => {
-    if (prog === null) return;
-    if (prog >= 100) {
-      void app.acquireImage().then((ok) => {
-        app.closeDialog();
-        if (ok) {
-          window.setTimeout(
-            () =>
-              app.msg(
-                "ACDSee",
-                `Acquired 1 image from ${sources[src]}.\n\nSaved to ${pathOf(app.folders, app.folderId)}.`,
-                "info"
-              ),
-            40
-          );
-        }
-      });
-      return;
-    }
-    const t = setTimeout(() => setProg(prog + 5), 80);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prog]);
-
-  if (prog !== null) {
-    return (
-      <Dialog title="Acquiring" icon="acquire" width={320} onClose={() => {}} noClose>
-        <div className="p-2 flex flex-col gap-2">
-          <div>Scanning from {sources[src]}...</div>
-          <Progress value={prog} />
-          <div className="flex justify-center pt-1">
-            <Button onClick={app.closeDialog}>Cancel</Button>
-          </div>
-        </div>
-      </Dialog>
-    );
-  }
-  const writable = app.canWriteTo(app.folderId) && app.folder.kind !== "recycle";
-  return (
-    <Dialog title="Select Source" icon="acquire" width={360} onClose={app.closeDialog} onEnter={() => writable && setProg(0)}>
-      <div className="p-1 flex flex-col gap-2">
-        <label>
-          <Mn text="&Select the source to acquire images from:" />
-        </label>
-        <div className="sunken bg-white" style={{ height: 110 }}>
-          {sources.map((s, i) => (
-            <div key={s} className={`px-1.5 h-[18px] flex items-center gap-1.5 ${i === src ? "bg-[#000080] text-white" : ""}`} onClick={() => setSrc(i)} onDoubleClick={() => writable && setProg(0)}>
-              <Icon name="acquire" />
-              {s}
-            </div>
-          ))}
-        </div>
-        <div className="text-[#404040] leading-[14px]">
-          {writable ? <>Images will be saved to <b>{pathOf(app.folders, app.folderId)}</b>.</> : "Choose a writable folder in the Browser first."}
-        </div>
-      </div>
-      <DialogButtons>
-        <Button def disabled={!writable} onClick={() => setProg(0)}>
-          &Select
         </Button>
         <Button onClick={app.closeDialog}>Cancel</Button>
       </DialogButtons>

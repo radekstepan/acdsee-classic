@@ -100,7 +100,6 @@ function Workspace({ viewerOpen }: { viewerOpen: boolean }) {
       let handled = true;
       if (k === "F5") cmd.refresh();
       else if (k === "F2") cmd.rename();
-      else if (k === "F3") cmd.find();
       else if (k === "F6") cmd.moveTo();
       else if (k === "F7") cmd.copyTo();
       else if (k === "F1") cmd.help();
@@ -126,8 +125,6 @@ function Workspace({ viewerOpen }: { viewerOpen: boolean }) {
       else if (ctrl && lk === "l") cmd.rotate(-1);
       else if (ctrl && lk === "r") cmd.rotate(1);
       else if (ctrl && lk === "s") cmd.slideshow();
-      else if (ctrl && lk === "p") cmd.print();
-      else if (ctrl && lk === "f") cmd.find();
       else if (ctrl && lk === "b") {
         app.setSettings({ showTree: true });
       } else handled = false;

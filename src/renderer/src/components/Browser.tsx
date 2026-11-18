@@ -107,10 +107,7 @@ export function Browser() {
           <ToolBtn icon="adjust" tip="Adjust Brightness / Contrast" onClick={cmd.adjust} disabled={!cmd.hasFiles()} />
           <ToolSep />
           <ToolBtn icon="slideshow" tip="Slide Show (Ctrl+S)" onClick={cmd.slideshow} />
-          <ToolBtn icon="find" tip="Find Files (F3)" onClick={cmd.find} />
           <ToolBtn icon="convert" tip="Convert Images" onClick={cmd.convert} />
-          <ToolBtn icon="acquire" tip="Acquire from Scanner / Camera" onClick={cmd.acquire} />
-          <ToolBtn icon="print" tip="Print (Ctrl+P)" onClick={cmd.print} disabled={!cmd.hasFiles()} />
           <ToolSep />
           <ToolBtn icon="props" tip="Properties (Alt+Enter)" onClick={cmd.props} disabled={!cmd.hasFiles()} />
           <ToolBtn icon="settings" tip="Options" onClick={() => cmd.options(0)} />

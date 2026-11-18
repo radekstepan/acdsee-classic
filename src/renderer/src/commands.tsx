@@ -88,7 +88,6 @@ export function useCommands() {
     },
     slideshow: () => app.startSlideshow(),
     slideshowOptions: () => app.openDialog({ type: "slideshow" }),
-    find: () => app.openDialog({ type: "find" }),
     convert: () => {
       const ids = selFileIds().length ? selFileIds() : app.visibleFiles.map((f) => f.id);
       if (!ids.length) {
@@ -97,14 +96,9 @@ export function useCommands() {
       }
       app.openDialog({ type: "convert", ids });
     },
-    acquire: () => app.openDialog({ type: "acquire" }),
     options: (tab = 0) => app.openDialog({ type: "options", tab }),
     about: () => app.openDialog({ type: "about" }),
     tip: () => app.openDialog({ type: "tip" }),
-    print: () => {
-      const ids = selFileIds();
-      if (ids.length) app.openDialog({ type: "print", ids });
-    },
     wallpaper: (mode: "center" | "tile" | "stretch") => {
       const id = primaryFileId();
       if (id) app.applyWallpaper(id, mode);
@@ -132,7 +126,7 @@ export function useCommands() {
     help: () =>
       app.msg(
         "ACDSee Help",
-        "The ACDSee help file (ACDSEE.HLP) could not be found.\n\nTry double-clicking an image, right-clicking things, or dragging thumbnails onto folders in the tree.\n\nShortcuts: F5 Refresh, F2 Rename, F3 Find, F6 Move To, F7 Copy To, Ctrl+L/R Rotate, Ctrl+S Slide Show.",
+        "The ACDSee help file (ACDSEE.HLP) could not be found.\n\nTry double-clicking an image, right-clicking things, or dragging thumbnails onto folders in the tree.\n\nShortcuts: F5 Refresh, F2 Rename, F6 Move To, F7 Copy To, Ctrl+L/R Rotate, Ctrl+S Slide Show.",
         "info",
       ),
     exit: () => shell.closeApp(),
@@ -206,7 +200,6 @@ export function useCommands() {
           { separator: true } as MenuItem,
         ]
       : []),
-    { label: "&Print...", icon: "print", shortcut: "Ctrl+P", disabled: !c.hasFiles(), onClick: c.print },
     { label: "Set &Wallpaper", icon: "wallpaper", submenu: wallpaperItems() },
     { separator: true },
     { label: "P&roperties", icon: "props", shortcut: "Alt+Enter", disabled: !c.hasFiles(), onClick: c.props },
@@ -254,10 +247,8 @@ export function useCommands() {
     { label: "&Slide Show", icon: "slideshow", shortcut: "Ctrl+S", onClick: c.slideshow },
     { label: "Slide Show &Options...", onClick: c.slideshowOptions },
     { separator: true },
-    { label: "&Find Files...", icon: "find", shortcut: "F3", onClick: c.find },
     { label: "&Convert Images...", icon: "convert", shortcut: "Ctrl+Shift+C", onClick: c.convert },
     { label: "&Batch Rename...", icon: "rename", shortcut: "Ctrl+Shift+R", onClick: c.batchRename },
-    { label: "A&cquire from Scanner / Camera...", icon: "acquire", onClick: c.acquire },
     { separator: true },
     { label: "Generate File &List...", icon: "docs", disabled: !app.visibleFiles.length, onClick: () => app.generateFileList(c.selFileIds()) },
     { separator: true },
@@ -296,7 +287,6 @@ export function useCommands() {
       { label: "Ro&tate / Flip", icon: "rotateR", submenu: rotateItems() },
       { label: "Set &Wallpaper", icon: "wallpaper", submenu: wallpaperItems() },
       { label: "&Convert...", icon: "convert", onClick: c.convert },
-      { label: "Pr&int...", icon: "print", onClick: c.print },
       { separator: true },
       { label: "&Delete", icon: "delete", onClick: c.del },
       { label: "Rena&me", icon: "rename", onClick: c.rename },

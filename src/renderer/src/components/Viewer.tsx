@@ -50,7 +50,7 @@ export function Viewer() {
   const fitS = (() => {
     if (!stage.w || !stage.h) return 1;
     const s = Math.min(stage.w / fw, stage.h / fh);
-    return settings.noEnlarge && !viewer.full ? Math.min(1, s) : viewer.full ? s : s;
+    return settings.noEnlarge && !viewer.full ? Math.min(1, s) : s;
   })();
   const scale = zoom === "fit" ? fitS : zoom;
   const dw = Math.max(1, Math.round(fw * scale));
@@ -263,7 +263,6 @@ export function Viewer() {
         { label: "&Close Viewer", shortcut: "Esc", icon: "thumbs", onClick: app.closeViewer },
         { separator: true },
         { label: "Save &As...", disabled: true },
-        { label: "&Print...", icon: "print", shortcut: "Ctrl+P", onClick: () => app.openDialog({ type: "print", ids: [file.id] }) },
         { separator: true },
         { label: "P&roperties", icon: "props", shortcut: "Alt+Enter", onClick: () => app.openDialog({ type: "props", ids: [file.id] }) },
         { separator: true },

@@ -113,7 +113,7 @@ function setupMenu(): void {
 void app.whenReady().then(() => {
   registerLocalFileProtocol();
   registerWindowControls();
-  registerFsHandlers(() => mainWindow);
+  registerFsHandlers();
   setupMenu();
   createWindow();
 

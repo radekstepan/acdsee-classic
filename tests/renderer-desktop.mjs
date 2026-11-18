@@ -205,7 +205,6 @@ const createApi = () => ({
   openPath: async () => {},
   showInFolder: async () => {},
   setWallpaper: async () => ({ ok: true, message: "Wallpaper set" }),
-  printImage: async () => {},
 
   window: {
     minimize: () => {},

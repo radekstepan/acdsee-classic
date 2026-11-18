@@ -41,7 +41,7 @@ await esbuild.build({
 
 const stub = await import("./electron-stub.mjs");
 const { registerFsHandlers } = await import(pathToFileURL(bundlePath).href);
-registerFsHandlers(() => null);
+registerFsHandlers();
 
 const invoke = async (channel, ...args) => {
   const fn = stub.handlers.get(channel);

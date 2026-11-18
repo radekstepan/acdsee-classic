@@ -100,7 +100,6 @@ export type AcdseeApi = {
   showInFolder: (path: string) => Promise<void>;
   openTrash: () => Promise<void>;
   setWallpaper: (path: string) => Promise<{ ok: boolean; message: string }>;
-  printImage: (path: string) => Promise<void>;
   window: {
     minimize: () => void;
     toggleMaximize: () => void;

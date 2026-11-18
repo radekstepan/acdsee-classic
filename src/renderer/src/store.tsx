@@ -12,8 +12,8 @@ import type {
   SortKey,
   ViewMode
 } from "./types";
-import { baseName, defaultSettings, generatedEntry, kindForIcon, newFileId } from "./data/fs";
-import { FORMATS, demoPhotoUrl, formatFor } from "./data/catalog";
+import { baseName, defaultSettings, kindForIcon, newFileId } from "./data/fs";
+import { FORMATS, formatFor } from "./data/catalog";
 import { ancestors, defaultEdit, fullName, pathOf, sortFiles, uniqueName } from "./utils/util";
 import { DEMO_START_FOLDER, demoFolders } from "./demo-data";
 import { desktop, isDesktop, platformName, trashLabel } from "./lib/bridge";
@@ -45,25 +45,6 @@ export interface Clip {
 export interface Wallpaper {
   src: string;
   mode: "center" | "tile" | "stretch";
-}
-
-export interface FindCriteria {
-  named: string;
-  lookIn: string;
-  subfolders: boolean;
-  dateMode: "all" | "between" | "days";
-  from: string;
-  to: string;
-  days: number;
-  type: string;
-  sizeMode: "any" | "atleast" | "atmost";
-  sizeKb: number;
-  text: string;
-}
-
-export interface FindHit {
-  file: FileEntry;
-  folderId: string;
 }
 
 const emptyFolder = (id: string): Folder => ({
@@ -1528,146 +1509,6 @@ function useStoreImpl() {
     [desktopMode, loadFolder, msg, updateFile]
   );
 
-  const printFiles = useCallback(
-    async (ids: string[]): Promise<number> => {
-      if (!desktopMode) return ids.length;
-      const firstEntry = ids
-        .map((id) => fileMapRef.current.get(id)?.file)
-        .find((f) => f?.path);
-      if (firstEntry?.path) await desktop().printImage(firstEntry.path);
-      return ids.length;
-    },
-    [desktopMode]
-  );
-
-  const findFiles = useCallback(
-    async (criteria: FindCriteria): Promise<FindHit[]> => {
-      let re: RegExp | null = null;
-      const pat = criteria.named.trim();
-      if (pat) {
-        const hasWild = /[*?]/.test(pat);
-        const src = pat
-          .split(/[;,]/)
-          .map((p) => p.trim())
-          .filter(Boolean)
-          .map((p) =>
-            hasWild
-              ? "^" +
-                p.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") +
-                "$"
-              : p.replace(/[.+^${}()|[\]\\*?]/g, "\\$&")
-          )
-          .join("|");
-        re = new RegExp(src, "i");
-      }
-      const now = Date.now();
-      const matches = (f: FileEntry): boolean => {
-        if (re && !re.test(fullName(f))) return false;
-        if (criteria.type !== "all" && f.ext !== criteria.type && formatFor(f.ext).type !== formatFor(criteria.type).type) return false;
-        if (criteria.dateMode === "between") {
-          const a = new Date(criteria.from).getTime();
-          const b = new Date(criteria.to).getTime() + 86400000;
-          if (!(f.modified >= a && f.modified <= b)) return false;
-        } else if (criteria.dateMode === "days" && now - f.modified > criteria.days * 86400000) {
-          return false;
-        }
-        if (criteria.sizeMode === "atleast" && f.size < criteria.sizeKb * 1024) return false;
-        if (criteria.sizeMode === "atmost" && f.size > criteria.sizeKb * 1024) return false;
-        if (criteria.text.trim()) {
-          const t = criteria.text.trim().toLowerCase();
-          if (
-            !(
-              f.desc.toLowerCase().includes(t) ||
-              f.keywords.toLowerCase().includes(t) ||
-              f.name.toLowerCase().includes(t)
-            )
-          )
-            return false;
-        }
-        return true;
-      };
-
-      const startId = criteria.lookIn;
-      if (!desktopMode) {
-        const out: FindHit[] = [];
-        const walk = (id: string) => {
-          const fol = foldersRef.current[id];
-          if (!fol) return;
-          for (const f of fol.files) if (matches(f)) out.push({ file: f, folderId: id });
-          if (criteria.subfolders) fol.children.forEach(walk);
-        };
-        walk(startId);
-        return out;
-      }
-
-      const start = foldersRef.current[startId];
-      if (!start?.path) return [];
-      const out: FindHit[] = [];
-      const discovered: Record<string, Folder> = {};
-      const idByPath = new Map<string, string>([[start.path, start.id]]);
-      const queue: string[] = [start.path];
-      const seen = new Set<string>();
-      let visited = 0;
-      while (queue.length && out.length < 500 && visited < 600) {
-        const dir = queue.shift()!;
-        if (seen.has(dir)) continue;
-        seen.add(dir);
-        visited += 1;
-        let listing: ListDirResult;
-        try {
-          listing = await desktop().listDir(dir, settingsRef.current.showHidden);
-        } catch {
-          continue;
-        }
-        const folderId = idByPath.get(dir) ?? dir;
-        for (const child of listing.folders) {
-          idByPath.set(child.path, child.path);
-          discovered[child.path] = {
-            id: child.path,
-            name: child.name,
-            parent: folderId,
-            kind: "folder",
-            children: [],
-            files: [],
-            path: child.path
-          };
-          if (criteria.subfolders) queue.push(child.path);
-        }
-        for (const entry of listing.files) {
-          const fe = fileFromDirEntry(entry, folderId);
-          if (matches(fe)) out.push({ file: fe, folderId });
-        }
-      }
-      if (Object.keys(discovered).length) {
-        setFolders((prev) => {
-          const next = { ...prev };
-          const childMap = new Map<string, string[]>();
-          for (const [id, fol] of Object.entries(discovered)) {
-            next[id] = { ...(next[id] ?? fol), ...fol, children: next[id]?.children ?? [], files: next[id]?.files ?? [] };
-            if (fol.parent) {
-              const list = childMap.get(fol.parent) ?? [];
-              list.push(id);
-              childMap.set(fol.parent, list);
-            }
-          }
-          for (const [parentId, kids] of childMap) {
-            const parent = next[parentId];
-            if (parent) {
-              next[parentId] = {
-                ...parent,
-                children: Array.from(new Set([...parent.children, ...kids]))
-              };
-            }
-          }
-          foldersRef.current = next;
-          return next;
-        });
-      }
-      return out;
-    },
-    [desktopMode]
-  );
-
   const batchRenameFiles = useCallback(
     async (ids: string[], template: string, start: number, lower: boolean): Promise<number> => {
       const files = ids
@@ -1709,57 +1550,6 @@ function useStoreImpl() {
     },
     [desktopMode, loadFolder, msg, renameFile]
   );
-
-  const acquireImage = useCallback(async (): Promise<boolean> => {
-    const fol = foldersRef.current[navRef.current.folderId];
-    if (!fol || !canWriteTo(fol.id)) return false;
-    const existing = fol.files.filter((f) => f.name.toUpperCase().startsWith("SCAN")).length;
-    const name = `SCAN${String(existing + 1).padStart(4, "0")}`;
-    if (desktopMode) {
-      if (!fol.path) return false;
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = 800;
-        canvas.height = 600;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return false;
-        const g = ctx.createLinearGradient(0, 0, 800, 600);
-        g.addColorStop(0, "#2a4f9c");
-        g.addColorStop(0.55, "#8fb4e8");
-        g.addColorStop(1, "#f4d38a");
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, 800, 600);
-        ctx.fillStyle = "rgba(255,255,255,.75)";
-        ctx.font = "bold 34px Arial";
-        ctx.fillText("ACQUIRED IMAGE", 36, 70);
-        ctx.font = "18px Arial";
-        ctx.fillText(new Date().toLocaleString(), 36, 104);
-        const dataUrl = canvas.toDataURL("image/png");
-        const saved = await desktop().saveDataUrl(fol.path, `${name}.png`, dataUrl);
-        await loadFolder(fol.id);
-        setSelection([saved], saved);
-        return true;
-      } catch (error) {
-        msg("Acquire", error instanceof Error ? error.message : String(error), "error");
-        return false;
-      }
-    }
-    const src = demoPhotoUrl(fol.files.length + 11);
-    const entry = generatedEntry({
-      id: newFileId(),
-      name,
-      ext: "jpg",
-      folderId: fol.id,
-      src,
-      fullSrc: src,
-      w: 800,
-      h: 600,
-      size: 420 * 1024
-    });
-    addGeneratedFiles(fol.id, [entry]);
-    setSelection([entry.id], entry.id);
-    return true;
-  }, [addGeneratedFiles, canWriteTo, desktopMode, loadFolder, msg, setSelection]);
 
   const generateFileList = useCallback(
     (ids?: string[]) => {
@@ -1860,10 +1650,7 @@ function useStoreImpl() {
     applyWallpaper,
     convertFiles,
     resizeImageFile,
-    printFiles,
-    findFiles,
     batchRenameFiles,
-    acquireImage,
     generateFileList
   };
 }

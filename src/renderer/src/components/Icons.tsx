@@ -13,12 +13,14 @@ const DGR = "#808080";
 
 const ImgPage = ({ color }: { color: string }) => (
   <>
-    <path d="M2.5 .5h8l3 3v12h-11z" fill="#fff" stroke={OUT} />
-    <path d="M10.5 .5v3h3" fill={GRY} stroke={OUT} />
-    <rect x="4" y="6" width="8" height="6" fill={SKY} />
-    <path d="M4 12l2.5-3.5 2 2 1.5-1.5 2 3z" fill="#208020" />
-    <rect x="10" y="7" width="1.5" height="1.5" fill="#ffff00" />
-    <rect x="3" y="13" width="10" height="1.6" fill={color} />
+    <path d="M2.5 .5h8l3 3v12h-11z" fill="#fff" stroke={OUT} strokeWidth=".8" />
+    <path d="M10.5 .5v3h3" fill={GRY} stroke={OUT} strokeWidth=".8" />
+    <rect x="3.5" y="4.5" width="9" height="7" fill={SKY} stroke="#404040" strokeWidth=".4" />
+    <rect x="3.5" y="4.5" width="9" height="1.6" fill="#bfe2ff" />
+    <circle cx="10.6" cy="6.6" r="1.1" fill="#fff59a" stroke="#d0a000" strokeWidth=".4" />
+    <path d="M3.5 11.5l2.8-4 2 2.4 1.4-1.6 1.8 3.2z" fill="#2f8030" />
+    <path d="M3.5 11.5l2.8-4 .9 1.1-1.7 2.9z" fill="#4aa04a" />
+    <rect x="3.5" y="12.5" width="9" height="2" fill={color} stroke="#303030" strokeWidth=".4" />
   </>
 );
 
@@ -114,14 +116,23 @@ const ICONS: Record<string, ReactNode> = {
   ),
   folder: (
     <>
-      <path d="M1.5 3.5h4.5l1 1h7.5v9h-13z" fill={YEL} stroke={YELD} />
-      <path d="M2 5.5h12" stroke="#fff8b8" />
+      <path d="M1.5 2.5h4.4l1 1.1h7.6v9.8h-13z" fill={YEL} stroke={YELD} />
+      <path d="M2.2 4.2h3.8l1 1.1h6.8" stroke="#fff8b8" fill="none" />
+      <path d="M2.2 12.2h11.6" stroke="#d8b020" strokeWidth=".7" />
+    </>
+  ),
+  folderLarge: (
+    <>
+      <path d="M1.5 2.5h4.4l1 1.1h7.6v9.8h-13z" fill={YEL} stroke={YELD} strokeWidth=".55" strokeLinejoin="miter" />
+      <path d="M2.2 4.2h3.8l1 1.1h6.8" stroke="#fff8b8" strokeWidth=".6" fill="none" />
+      <path d="M2.2 12.2h11.6" stroke="#d8b020" strokeWidth=".55" />
     </>
   ),
   folderOpen: (
     <>
-      <path d="M1.5 3.5h4l1 1h6v2" fill="#d8b020" stroke={YELD} />
-      <path d="M3.5 6.5h12l-2 7h-12z" fill={YEL} stroke={YELD} />
+      <path d="M1.5 3h4l1 1h6v2" fill="#d8b020" stroke={YELD} />
+      <path d="M3.5 6h12l-2 7h-12z" fill={YEL} stroke={YELD} />
+      <path d="M4.3 6.9h10.2" stroke="#fff8b8" />
     </>
   ),
   appIcon: (
@@ -160,7 +171,7 @@ const ICONS: Record<string, ReactNode> = {
   ),
   home: (
     <>
-      <path d="M8 1.500l7 6h-2v7h-3.500v-4h-3v4h-3.500v-7h-2z" fill="#e05040" stroke="#600000" />
+      <path d="M8 1l7 6h-2v7h-3.5v-4h-3v4H3v-7H1z" fill="#e05040" stroke="#600000" />
     </>
   ),
   thumbs: (
@@ -257,15 +268,6 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M7 1.500l1 1-1 1" fill="none" stroke="none" />
     </>
   ),
-  print: (
-    <>
-      <rect x="4.500" y=".5" width="7" height="5" fill="#fff" stroke={OUT} />
-      <rect x=".5" y="5.500" width="15" height="6" fill={GRY} stroke={OUT} />
-      <rect x="3.500" y="9.500" width="9" height="5" fill="#fff" stroke={OUT} />
-      <path d="M5 11.500h6M5 13h4" stroke={DGR} />
-      <rect x="12" y="7" width="2" height="1" fill="#00c000" />
-    </>
-  ),
   slideshow: (
     <>
       <rect x="1.500" y="1.500" width="13" height="9" fill="#fff" stroke={OUT} />
@@ -274,19 +276,26 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M8 10.500v3M5 15.500l3-2 3 2" stroke={OUT} fill="none" />
     </>
   ),
-  find: <Magnifier />,
   rotateR: (
     <>
-      <path d="M12.500 9a4.500 4.500 0 1 1-1.500-4" fill="none" stroke={BLU} strokeWidth="2" />
-      <path d="M14.500 1.500v5.500h-5.500z" fill={BLU} />
-      <rect x="4" y="6" width="4" height="4" fill="#ffe080" stroke={OUT} />
+      <path d="M13 8.5A5 5 0 1 1 10.6 3.7" fill="none" stroke={BLU} strokeWidth="1.6" />
+      <path d="M14.7 1.3l-.3 5-4.4-2.4z" fill={BLU} />
+      <rect x="4.5" y="5" width="7" height="6.5" fill="#fff" stroke={OUT} strokeWidth=".8" />
+      <rect x="5.4" y="5.8" width="5.2" height="3.6" fill={SKY} />
+      <circle cx="9.4" cy="6.9" r=".7" fill="#fff59a" />
+      <path d="M5.4 9.4l1.7-2.2 1.2 1.2.9-.9 1.4 1.9z" fill="#308030" />
+      <rect x="5.4" y="9.9" width="5.2" height=".8" fill="#ffd84a" />
     </>
   ),
   rotateL: (
     <g transform="translate(16 0) scale(-1 1)">
-      <path d="M12.500 9a4.500 4.500 0 1 1-1.500-4" fill="none" stroke={BLU} strokeWidth="2" />
-      <path d="M14.500 1.500v5.500h-5.500z" fill={BLU} />
-      <rect x="4" y="6" width="4" height="4" fill="#ffe080" stroke={OUT} />
+      <path d="M13 8.5A5 5 0 1 1 10.6 3.7" fill="none" stroke={BLU} strokeWidth="1.6" />
+      <path d="M14.7 1.3l-.3 5-4.4-2.4z" fill={BLU} />
+      <rect x="4.5" y="5" width="7" height="6.5" fill="#fff" stroke={OUT} strokeWidth=".8" />
+      <rect x="5.4" y="5.8" width="5.2" height="3.6" fill={SKY} />
+      <circle cx="9.4" cy="6.9" r=".7" fill="#fff59a" />
+      <path d="M5.4 9.4l1.7-2.2 1.2 1.2.9-.9 1.4 1.9z" fill="#308030" />
+      <rect x="5.4" y="9.9" width="5.2" height=".8" fill="#ffd84a" />
     </g>
   ),
   flipH: (
@@ -351,15 +360,6 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M10 3.500h4V1.500l2 2.500-2 2.500V4.500h-4z" fill="#ff9020" stroke="#803000" strokeWidth=".6" />
     </>
   ),
-  acquire: (
-    <>
-      <rect x=".5" y="4.500" width="15" height="9" fill="#a8a8a8" stroke={OUT} />
-      <rect x="4.500" y="2.500" width="5" height="2" fill={DGR} stroke={OUT} />
-      <circle cx="8" cy="9" r="3.200" fill="#385878" stroke={OUT} />
-      <circle cx="7" cy="8" r="1" fill="#a0d0ff" />
-      <rect x="12" y="6" width="2" height="1.500" fill="#ffee00" />
-    </>
-  ),
   info: (
     <>
       <circle cx="8" cy="8" r="6.500" fill="#2060d0" stroke="#002060" />
@@ -407,8 +407,9 @@ const ICONS: Record<string, ReactNode> = {
   ),
   adjust: (
     <>
-      <circle cx="8" cy="8" r="6.500" fill="#fff" stroke={OUT} />
-      <path d="M8 1.500a6.500 6.500 0 0 1 0 13z" fill={OUT} />
+      <circle cx="8" cy="8" r="4.2" fill="#fff" stroke={OUT} strokeWidth=".8" />
+      <path d="M8 3.8a4.2 4.2 0 0 1 0 8.4z" fill={OUT} />
+      <path d="M8 .8v1.8M8 13.4v1.8M.8 8h1.8M13.4 8h1.8M2.9 2.9l1.3 1.3M11.8 11.8l1.3 1.3M13.1 2.9l-1.3 1.3M2.9 13.1l1.3-1.3" stroke={OUT} strokeWidth=".9" />
     </>
   ),
   resize: (
@@ -474,9 +475,14 @@ const ICONS: Record<string, ReactNode> = {
   ),
   settings: (
     <>
-      <circle cx="8" cy="8" r="5" fill={GRY} stroke={OUT} />
-      <circle cx="8" cy="8" r="1.800" fill="#fff" stroke={OUT} />
-      <path d="M8 1v2.500M8 12.500V15M1 8h2.500M12.500 8H15" stroke={OUT} strokeWidth="2" />
+      <path
+        d="M6.70 1.32L9.30 1.32L9.51 3.34L10.22 3.63L11.80 2.36L13.64 4.20L12.37 5.78L12.66 6.49L14.68 6.70L14.68 9.30L12.66 9.51L12.37 10.22L13.64 11.80L11.80 13.64L10.22 12.37L9.51 12.66L9.30 14.68L6.70 14.68L6.49 12.66L5.78 12.37L4.20 13.64L2.36 11.80L3.63 10.22L3.34 9.51L1.32 9.30L1.32 6.70L3.34 6.49L3.63 5.78L2.36 4.20L4.20 2.36L5.78 3.63L6.49 3.34Z"
+        fill={GRY}
+        stroke={OUT}
+        strokeWidth=".7"
+        strokeLinejoin="miter"
+      />
+      <circle cx="8" cy="8" r="2.2" fill="#fff" stroke={OUT} strokeWidth=".8" />
     </>
   ),
   shutdown: (
@@ -564,7 +570,7 @@ export function fileIconName(ext: string): string {
   return `img:${ext}`;
 }
 
-export function folderIconName(kind: string, open = false, full = false): string {
+export function folderIconName(kind: string, open = false, full = false, large = false): string {
   switch (kind) {
     case "desktop":
       return "desktop";
@@ -583,6 +589,6 @@ export function folderIconName(kind: string, open = false, full = false): string
     case "recycle":
       return full ? "recycleFull" : "recycle";
     default:
-      return open ? "folderOpen" : "folder";
+      return large ? "folderLarge" : open ? "folderOpen" : "folder";
   }
 }

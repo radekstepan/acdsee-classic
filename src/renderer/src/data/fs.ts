@@ -19,7 +19,7 @@ export const defaultSettings: Settings = {
   useRecycle: true,
   viewerBg: "black",
   fitToWindow: true,
-  noEnlarge: true,
+  noEnlarge: false,
   wheelMode: "navigate",
   slideDelay: 4,
   slideLoop: true,

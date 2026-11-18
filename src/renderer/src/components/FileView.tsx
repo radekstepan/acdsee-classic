@@ -317,7 +317,7 @@ export function FileView({ onContext, onOpen }: Props) {
       visual = (
         <div style={{ width: size + 8, height: size + 8 }} className="flex items-center justify-center">
           <div className="relative">
-            <Icon name={folderIconName(f.kind, false, folders.recycle.files.length > 0)} size={isz} style={cut(id) ? { opacity: 0.5 } : undefined} />
+            <Icon name={folderIconName(f.kind, false, folders.recycle.files.length > 0, true)} size={isz} style={cut(id) ? { opacity: 0.5 } : undefined} />
             {sel && <div className="absolute inset-0" style={{ background: focused ? "rgba(0,0,128,.5)" : "rgba(128,128,128,.55)", mixBlendMode: "multiply" }} />}
           </div>
         </div>
@@ -369,7 +369,7 @@ export function FileView({ onContext, onOpen }: Props) {
     return (
       <div key={id} {...commonProps(id)} className="flex flex-col items-center" style={{ width: 84, padding: "4px 0 6px" }}>
         <div className="relative" style={{ opacity: cut(id) ? 0.5 : 1 }}>
-          <Icon name={folder ? folderIconName(folders[id].kind, false, folders.recycle.files.length > 0) : fileIconName(file(id).ext)} size={32} />
+          <Icon name={folder ? folderIconName(folders[id].kind, false, folders.recycle.files.length > 0, true) : fileIconName(file(id).ext)} size={32} />
           {sel && <div className="absolute inset-0" style={{ background: focused ? "rgba(0,0,128,.5)" : "rgba(128,128,128,.55)", mixBlendMode: "multiply" }} />}
         </div>
         <div className="max-w-full flex justify-center mt-1">{labelFor(id, { maxWidth: 82 })}</div>

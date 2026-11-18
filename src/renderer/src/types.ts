@@ -148,7 +148,6 @@ export type DialogSpec =
   | { type: "props"; ids: string[] }
   | { type: "options"; tab?: number }
   | { type: "slideshow" }
-  | { type: "find" }
   | { type: "convert"; ids: string[] }
   | { type: "rename"; id: string }
   | { type: "batchRename"; ids: string[] }
@@ -156,8 +155,6 @@ export type DialogSpec =
   | { type: "newFolder"; parent: string }
   | { type: "adjust"; id: string }
   | { type: "resize"; id: string }
-  | { type: "acquire" }
-  | { type: "print"; ids: string[] }
   | { type: "tip" }
   | { type: "filelist"; text: string }
   | {

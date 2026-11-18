@@ -2,11 +2,10 @@ import { execFile } from "child_process";
 import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
-import { BrowserWindow, app, ipcMain, nativeImage, shell } from "electron";
+import { app, ipcMain, nativeImage, shell } from "electron";
 import { imageSizeFromFile } from "image-size/fromFile";
 import {
   VIRTUAL_ROOT,
-  localFileUrl,
   type DirEntry,
   type ExifInfo,
   type FolderNode,
@@ -218,7 +217,7 @@ async function uniqueTargetPath(dir: string, fileName: string): Promise<string> 
 // IPC registration
 // ---------------------------------------------------------------------------
 
-export function registerFsHandlers(getMainWindow: () => BrowserWindow | null): void {
+export function registerFsHandlers(): void {
   ipcMain.handle("acdsee:system-paths", (): SystemPaths => {
     const home = os.homedir();
     return {
@@ -457,22 +456,4 @@ export function registerFsHandlers(getMainWindow: () => BrowserWindow | null): v
       }
     }
   );
-
-  ipcMain.handle("acdsee:print-image", async (_event, fullPath: string): Promise<void> => {
-    const win = getMainWindow();
-    if (!win) return;
-    const printWin = new BrowserWindow({
-      show: false,
-      webPreferences: { sandbox: true }
-    });
-    const html = `<!doctype html><html><body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${localFileUrl(fullPath)}" style="max-width:100%;max-height:100vh"/></body></html>`;
-    await printWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
-    await new Promise<void>((resolvePromise) => {
-      printWin.webContents.once("did-finish-load", () => resolvePromise());
-      setTimeout(() => resolvePromise(), 4000);
-    });
-    printWin.webContents.print({ silent: false }, () => {
-      if (!printWin.isDestroyed()) printWin.close();
-    });
-  });
 }

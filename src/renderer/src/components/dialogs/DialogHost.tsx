@@ -2,17 +2,15 @@ import { useApp } from "../../store";
 import { MsgBox } from "../ui";
 import {
   AboutDialog,
-  AcquireDialog,
   FileListDialog,
   NewFolderDialog,
   OptionsDialog,
-  PrintDialog,
   PropertiesDialog,
   RenameDialog,
   SlideShowDialog,
   TipDialog,
 } from "./Basic";
-import { AdjustDialog, BatchRenameDialog, ConvertDialog, FindDialog, FolderPickerDialog, ResizeDialog } from "./Tools";
+import { AdjustDialog, BatchRenameDialog, ConvertDialog, FolderPickerDialog, ResizeDialog } from "./Tools";
 
 export function DialogHost() {
   const app = useApp();
@@ -29,8 +27,6 @@ export function DialogHost() {
             return <OptionsDialog key={key} tab={d.tab} />;
           case "slideshow":
             return <SlideShowDialog key={key} />;
-          case "find":
-            return <FindDialog key={key} />;
           case "convert":
             return <ConvertDialog key={key} ids={d.ids} />;
           case "rename":
@@ -45,10 +41,6 @@ export function DialogHost() {
             return <AdjustDialog key={key} id={d.id} />;
           case "resize":
             return <ResizeDialog key={key} id={d.id} />;
-          case "acquire":
-            return <AcquireDialog key={key} />;
-          case "print":
-            return <PrintDialog key={key} ids={d.ids} />;
           case "tip":
             return <TipDialog key={key} />;
           case "filelist":
