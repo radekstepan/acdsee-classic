@@ -1,5 +1,7 @@
 # ACDSee Classic
 
+![ACDSee Classic browser with the demo photo library](resources/screenshot.png)
+
 A cross-platform love letter to the classic ACDSee 3.x image browser — the Win98-era
 chrome, menus, and workflow, running natively on **macOS, Windows, and Linux** and
 browsing your **real** photo folders.
