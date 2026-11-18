@@ -88,6 +88,8 @@ export type AcdseeApi = {
   listChildren: (id: string) => Promise<FolderNode[]>;
   /** Folder contents for the file stage. */
   listDir: (path: string, includeHidden?: boolean) => Promise<ListDirResult>;
+  /** OS trash contents for the Recycle Bin view (empty on platforms without a listable trash). */
+  listTrash: (includeHidden?: boolean) => Promise<ListDirResult>;
   /** Thumbnails as JPEG data URLs. `size` is the tile size; the main process
       scales the OS request up (small requests return cover-crops). Returns
       null per path when unavailable, with bitmap dims for tile sizing. */

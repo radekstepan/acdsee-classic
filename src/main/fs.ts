@@ -129,6 +129,57 @@ function iconForFolder(fullPath: string): FolderNode["icon"] {
   return "folder";
 }
 
+async function listImageDir(dirPath: string, includeHidden = false): Promise<ListDirResult> {
+  let entries;
+  try {
+    entries = await fs.readdir(dirPath, { withFileTypes: true });
+  } catch {
+    return { path: dirPath, parent: path.dirname(dirPath), folders: [], files: [] };
+  }
+  const folders: DirEntry[] = [];
+  const files: DirEntry[] = [];
+  await Promise.all(
+    entries.map(async (entry) => {
+      if (entry.name.startsWith(".") && !includeHidden) return;
+      if (HIDDEN_DIR_NAMES.has(entry.name) && !includeHidden) return;
+      const full = path.join(dirPath, entry.name);
+      const st = await safeStat(full);
+      if (!st) return;
+      if (st.isDirectory()) {
+        folders.push({
+          name: entry.name,
+          path: full,
+          size: 0,
+          mtimeMs: st.mtimeMs,
+          ext: ""
+        });
+        return;
+      }
+      if (!st.isFile() || !isImageFile(entry.name)) return;
+      files.push({
+        name: entry.name,
+        path: full,
+        size: st.size,
+        mtimeMs: st.mtimeMs,
+        ext: path.extname(entry.name).toLowerCase()
+      });
+    })
+  );
+  const byName = (a: DirEntry, b: DirEntry) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+  folders.sort(byName);
+  files.sort(byName);
+  const parent = path.dirname(dirPath);
+  return { path: dirPath, parent: parent === dirPath ? null : parent, folders, files };
+}
+
+function trashFilesDir(): string | null {
+  if (process.platform === "darwin") return path.join(os.homedir(), ".Trash");
+  if (process.platform === "win32") return null;
+  const base = process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share");
+  return path.join(base, "Trash", "files");
+}
+
 async function listSubfolders(dirPath: string, parentId: string): Promise<FolderNode[]> {
   let entries;
   try {
@@ -257,47 +308,18 @@ export function registerFsHandlers(): void {
   });
 
   ipcMain.handle("acdsee:list-dir", async (_event, dirPath: string, includeHidden = false): Promise<ListDirResult> => {
-    let entries;
+    return listImageDir(dirPath, includeHidden);
+  });
+
+  ipcMain.handle("acdsee:list-trash", async (_event, includeHidden = false): Promise<ListDirResult> => {
+    const dir = trashFilesDir();
+    if (!dir) return { path: "", parent: null, folders: [], files: [] };
     try {
-      entries = await fs.readdir(dirPath, { withFileTypes: true });
+      await fs.access(dir);
     } catch {
-      return { path: dirPath, parent: path.dirname(dirPath), folders: [], files: [] };
+      return { path: dir, parent: null, folders: [], files: [] };
     }
-    const folders: DirEntry[] = [];
-    const files: DirEntry[] = [];
-    await Promise.all(
-      entries.map(async (entry) => {
-        if (entry.name.startsWith(".") && !includeHidden) return;
-        if (HIDDEN_DIR_NAMES.has(entry.name) && !includeHidden) return;
-        const full = path.join(dirPath, entry.name);
-        const st = await safeStat(full);
-        if (!st) return;
-        if (st.isDirectory()) {
-          folders.push({
-            name: entry.name,
-            path: full,
-            size: 0,
-            mtimeMs: st.mtimeMs,
-            ext: ""
-          });
-          return;
-        }
-        if (!st.isFile() || !isImageFile(entry.name)) return;
-        files.push({
-          name: entry.name,
-          path: full,
-          size: st.size,
-          mtimeMs: st.mtimeMs,
-          ext: path.extname(entry.name).toLowerCase()
-        });
-      })
-    );
-    const byName = (a: DirEntry, b: DirEntry) =>
-      a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-    folders.sort(byName);
-    files.sort(byName);
-    const parent = path.dirname(dirPath);
-    return { path: dirPath, parent: parent === dirPath ? null : parent, folders, files };
+    return listImageDir(dir, includeHidden);
   });
 
   ipcMain.handle(

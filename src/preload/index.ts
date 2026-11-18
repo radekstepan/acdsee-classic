@@ -8,6 +8,7 @@ const api: AcdseeApi = {
   listChildren: (id: string) => ipcRenderer.invoke("acdsee:list-children", id),
   listDir: (path: string, includeHidden?: boolean) =>
     ipcRenderer.invoke("acdsee:list-dir", path, includeHidden),
+  listTrash: (includeHidden?: boolean) => ipcRenderer.invoke("acdsee:list-trash", includeHidden),
   thumbs: (paths: string[], size: number) =>
     ipcRenderer.invoke("acdsee:thumbs", paths, size),
   imageMeta: (path: string) => ipcRenderer.invoke("acdsee:image-meta", path),

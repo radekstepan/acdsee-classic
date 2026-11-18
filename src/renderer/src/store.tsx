@@ -451,14 +451,17 @@ function useStoreImpl() {
         }
         return foldersRef.current[id]?.files ?? [];
       }
-      if (!target.path) {
+      if (!target.path && id !== RECYCLE_ID) {
         if (target.kind === "computer") void ensureChildren(id);
         setBusySoon();
         if (options.selectFirst) setSelectedFirst(null);
         return [];
       }
       try {
-        const listing: ListDirResult = await desktop().listDir(target.path, settingsRef.current.showHidden);
+        const listing: ListDirResult =
+          id === RECYCLE_ID
+            ? await desktop().listTrash(settingsRef.current.showHidden)
+            : await desktop().listDir(target.path, settingsRef.current.showHidden);
         if (seq !== loadSeq.current) return [];
         const previous = new Map((foldersRef.current[id]?.files ?? []).map((f) => [f.id, f]));
         const files = listing.files.map((entry) => fileFromDirEntry(entry, id, previous.get(entry.path)));
@@ -541,7 +544,7 @@ function useStoreImpl() {
       setFocusId(null);
       setRenamingId(null);
       expandTo(id);
-      if (desktopMode && f.path) {
+      if (desktopMode && (f.path || id === RECYCLE_ID)) {
         // Clear the old contents immediately, then fill from disk.
         setFolders((prev) => {
           if (!prev[id]) return prev;
@@ -632,7 +635,7 @@ function useStoreImpl() {
   useEffect(() => {
     if (!desktopMode || !ready) return;
     const fol = foldersRef.current[folderId];
-    if (!fol?.path || !fol.files.length) return;
+    if ((!fol?.path && folderId !== RECYCLE_ID) || !fol.files.length) return;
     void loadThumbs(folderId, fol.files, settings.thumbSize);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.thumbSize]);
@@ -641,7 +644,7 @@ function useStoreImpl() {
   useEffect(() => {
     if (!desktopMode || !ready) return;
     const fol = foldersRef.current[folderId];
-    if (fol?.path) void loadFolder(folderId);
+    if (fol?.path || folderId === RECYCLE_ID) void loadFolder(folderId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.showHidden]);
 
