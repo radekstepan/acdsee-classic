@@ -11,7 +11,7 @@
  *   ~/.local/bin/acdsee-classic               a tiny launcher shim
  *   ~/.local/share/applications/*.desktop     the application-menu entry
  *   ~/<Desktop>/*.desktop                     a desktop icon
- *   ~/.local/share/icons/hicolor/.../*.png    the app icon
+ *   ~/.local/share/icons/hicolor/NxN/apps/    the app icon at all standard sizes
  */
 import {
   chmodSync,
@@ -42,8 +42,9 @@ const dataHome = process.env.XDG_DATA_HOME || join(home, ".local", "share");
 const appDir = join(dataHome, slug);
 const binDir = join(home, ".local", "bin");
 const shimPath = join(binDir, slug);
-const iconDir = join(dataHome, "icons", "hicolor", "1024x1024", "apps");
-const iconPath = join(iconDir, `${slug}.png`);
+const iconRoot = join(dataHome, "icons", "hicolor");
+const iconSizes = [16, 24, 32, 48, 64, 128, 256, 512, 1024];
+const iconPath = (size) => join(iconRoot, `${size}x${size}`, "apps", `${slug}.png`);
 const appsDir = join(dataHome, "applications");
 const menuEntry = join(appsDir, `${slug}.desktop`);
 
@@ -100,7 +101,9 @@ function uninstallLauncher() {
   for (const path of [menuEntry, join(desktopDir(), `${slug}.desktop`)]) {
     rmSync(path, { force: true });
   }
-  rmSync(iconPath, { force: true });
+  for (const size of iconSizes) {
+    rmSync(iconPath(size), { force: true });
+  }
   rmSync(shimPath, { force: true });
   rmSync(appDir, { recursive: true, force: true });
   refreshCaches();
@@ -141,9 +144,13 @@ function installLauncher() {
   );
   chmodSync(shimPath, 0o755);
 
-  // App icon (the .desktop file refers to it by name).
-  mkdirSync(iconDir, { recursive: true });
-  copyFileSync(join(root, "resources", "icon.png"), iconPath);
+  // App icon at every hicolor size (the .desktop file refers to it by name).
+  for (const size of iconSizes) {
+    const dir = join(iconRoot, `${size}x${size}`, "apps");
+    const source = join(root, "resources", "icons", `${size}x${size}.png`);
+    mkdirSync(dir, { recursive: true });
+    copyFileSync(existsSync(source) ? source : join(root, "resources", "icon.png"), iconPath(size));
+  }
 
   const desktopEntry = [
     "[Desktop Entry]",

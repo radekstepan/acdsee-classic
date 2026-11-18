@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { FORMATS } from "../data/catalog";
+import appIconUrl from "../assets/app-icon.png?inline";
 
 const OUT = "#000";
 const YEL = "#ffe56a";
@@ -133,16 +134,6 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M1.5 3h4l1 1h6v2" fill="#d8b020" stroke={YELD} />
       <path d="M3.5 6h12l-2 7h-12z" fill={YEL} stroke={YELD} />
       <path d="M4.3 6.9h10.2" stroke="#fff8b8" />
-    </>
-  ),
-  appIcon: (
-    <>
-      <rect x=".5" y=".5" width="12" height="11" fill="#fff" stroke={OUT} />
-      <rect x="2" y="2" width="9" height="8" fill="#3a78d8" />
-      <path d="M2 10l3-4 2 2 1.5-1.5L11 10z" fill="#30a030" />
-      <rect x="8" y="3" width="2" height="2" fill="#ffee40" />
-      <circle cx="10.5" cy="10.5" r="3.2" fill="#e8f4ff" stroke={OUT} />
-      <path d="M13 13l2.5 2.5" stroke="#a04000" strokeWidth="2.4" />
     </>
   ),
   start: (
@@ -504,6 +495,19 @@ interface IconProps {
 }
 
 export function Icon({ name, size = 16, style, className }: IconProps) {
+  if (name === "appIcon") {
+    return (
+      <img
+        src={appIconUrl}
+        width={size}
+        height={size}
+        alt=""
+        draggable={false}
+        style={{ flex: "none", display: "block", ...style }}
+        className={className}
+      />
+    );
+  }
   let content: ReactNode;
   if (name.startsWith("img:")) {
     const ext = name.slice(4);

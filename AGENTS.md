@@ -54,7 +54,8 @@ tests/
   smoke.mjs            boots the built renderer in jsdom (demo mode)
   renderer-desktop.mjs boots it with a mocked window.acdsee and real-path fixtures
   ipc.mjs              bundles src/main/fs.ts with electron stubbed, tests handlers on real files
-resources/     icon.png/icon.icns/icon.ico (+ icon-src.png master art)
+resources/     icon.png/icon.icns/icon.ico (+ icon-src.png master art,
+               icons/ 16–1024 hicolor PNGs for the Linux launcher)
 ```
 
 ## Architecture notes
@@ -134,3 +135,5 @@ resources/     icon.png/icon.icns/icon.ico (+ icon-src.png master art)
 (`iconutil` rejects sips-made sets on this machine). Recipe: resize the master
 with `sips -z` to 16…1024, pack ICNS entries
 (`icp4,icp5,icp6,ic07,ic08,ic09,ic10`) and ICO entries (16…256) with PNG payloads.
+Keep the per-size PNGs in `resources/icons/NxN.png` in sync — the Linux launcher
+installs those into `~/.local/share/icons/hicolor`.
