@@ -55,7 +55,6 @@ tests/
   renderer-desktop.mjs boots it with a mocked window.acdsee and real-path fixtures
   ipc.mjs              bundles src/main/fs.ts with electron stubbed, tests handlers on real files
 resources/     icon.png/icon.icns/icon.ico (+ icon-src.png master art)
-vendor/original-templates/  the two template zips this app was built from
 ```
 
 ## Architecture notes
