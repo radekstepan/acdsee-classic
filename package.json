@@ -6,6 +6,7 @@
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",
+  "desktopName": "acdsee-classic.desktop",
   "author": "ACDSee Classic contributors",
   "packageManager": "yarn@4.18.1",
   "scripts": {
@@ -58,6 +59,12 @@
       "out/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "resources/icon.png",
+        "to": "icon.png"
+      }
+    ],
     "mac": {
       "category": "public.app-category.photography",
       "target": [
@@ -73,6 +80,7 @@
     "linux": {
       "category": "Graphics",
       "maintainer": "ACDSee Classic contributors <acdsee-classic@users.noreply.github.com>",
+      "syncDesktopName": true,
       "target": [
         "AppImage",
         "deb"

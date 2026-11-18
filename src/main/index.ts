@@ -5,12 +5,25 @@ import { registerFsHandlers } from "./fs";
 
 let mainWindow: BrowserWindow | null = null;
 
+/**
+ * Window/taskbar icon. Packaged builds ship it via `extraResources` (Linux and
+ * Windows use the window icon for the taskbar/dock); dev reads the repo copy.
+ * Linux Wayland desktops ignore this and resolve the icon through the installed
+ * `.desktop` entry instead — hence `desktopName` in package.json.
+ */
+function appIconPath(): string {
+  return app.isPackaged
+    ? join(process.resourcesPath, "icon.png")
+    : join(app.getAppPath(), "resources", "icon.png");
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 900,
     minHeight: 600,
+    icon: appIconPath(),
     // Frameless: the app draws its own classic Win98-style title bar.
     frame: false,
     // Win98 chrome is square. Linux desktops that support client-side
