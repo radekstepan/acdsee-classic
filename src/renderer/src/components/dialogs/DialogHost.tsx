@@ -9,7 +9,6 @@ import {
   PrintDialog,
   PropertiesDialog,
   RenameDialog,
-  RunDialog,
   SlideShowDialog,
   TipDialog,
 } from "./Basic";
@@ -52,8 +51,6 @@ export function DialogHost() {
             return <PrintDialog key={key} ids={d.ids} />;
           case "tip":
             return <TipDialog key={key} />;
-          case "run":
-            return <RunDialog key={key} />;
           case "filelist":
             return <FileListDialog key={key} text={d.text} />;
           case "msg":

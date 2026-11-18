@@ -32,11 +32,11 @@ src/
   renderer/    React app (electron-vite renderer root)
     index.html
     src/
-      App.tsx        Win98 desktop shell: windows, taskbar, Start menu, splash
+      App.tsx        app root: full-window ACDSee browser + viewer frames
       store.tsx      single app store: real folders/files, selection, viewer, dialogs
       types.ts       Folder/FileEntry/Settings/DialogSpec model
       commands.tsx   menus, toolbar commands, context menus
-      shell.tsx      close/minimize/run-command bridge for the desktop shell
+      shell.tsx      close/run-command bridge for the app frame
       data/fs.ts     initial shell, settings, file-entry helpers
       data/catalog.ts image formats + bundled demo-photo list
       demo-data.ts   static sample library for browser/demo mode
@@ -44,7 +44,7 @@ src/
       lib/imaging.ts canvas convert/resize (no native deps)
       app.css        frameless-window drag regions
       components/    Browser, FileView, FolderTree, PreviewPane, Viewer,
-                     Toolbar, Taskbar, Splash, EditedImage, Icons, ui
+                     Toolbar, EditedImage, Icons, ui
       components/dialogs/  Basic, Tools, DialogHost (classic modal dialogs)
       index.css      classic Win98/ACDSee theme (keep intact)
     public/photos/   demo-mode sample images (also shipped in the app bundle)
@@ -58,10 +58,10 @@ vendor/original-templates/  the two template zips this app was built from
 
 ## Architecture notes
 
-- **Desktop shell.** The UI is the classic Win98 desktop from the design package:
-  teal wallpaper, desktop icons, taskbar/Start menu, splash screen and simulated
-  ACDSee browser + viewer windows. The Electron window stays frameless; the empty
-  desktop is the native drag surface (`app.css`).
+- **Full-window app.** The UI boots straight into the classic ACDSee browser
+  filling the frameless Electron window, with the viewer opening as a second
+  frame on top. There is no virtual desktop, taskbar/Start menu or splash screen;
+  the classic title bar doubles as the native drag surface (`app.css`).
 - **Data flow:** `store.tsx` is the single source of truth (`useApp()`). It owns
   `folders`, selection, settings, viewer state and the dialog stack. Folder/files
   are loaded lazily from `window.acdsee` (listRoots → listChildren/listDir), while

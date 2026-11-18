@@ -351,7 +351,7 @@ const addressInput = [...document.querySelectorAll(".window98 input")].find(
 assert(addressInput, "address bar shows /demo/Pictures");
 
 /* ---------------- classic shell ---------------- */
-assert(document.querySelector(".taskbar"), "Win98 taskbar renders");
+assert(!document.querySelector(".taskbar"), "no Win98 taskbar / Start menu");
 assert(document.querySelectorAll(".status-panel").length >= 3, "classic status bar renders");
 
 const treeLabels = [...document.querySelectorAll(".tv-label")].map((el) => (el.textContent ?? "").trim());

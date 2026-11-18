@@ -159,7 +159,6 @@ export type DialogSpec =
   | { type: "acquire" }
   | { type: "print"; ids: string[] }
   | { type: "tip" }
-  | { type: "run" }
   | { type: "filelist"; text: string }
   | {
       type: "msg";

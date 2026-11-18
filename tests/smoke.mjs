@@ -92,7 +92,8 @@ assert(
   `thumbnails render (${document.querySelectorAll("[data-id]").length})`
 );
 assert(document.querySelector(".file-label"), "file labels render");
-assert(document.querySelector(".taskbar"), "taskbar renders");
+assert(!document.querySelector(".taskbar"), "no Win98 taskbar / Start menu");
+assert(!document.querySelector(".desktop-area"), "no virtual desktop shell");
 assert(document.querySelector("[data-tip]"), "classic tooltips are wired");
 
 const fatal = errors.filter((message) => !/Could not load img|Could not load link/i.test(message));

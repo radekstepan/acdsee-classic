@@ -1,25 +1,6 @@
-/* Desktop-shell glue for the frameless Electron window. */
+/* Glue for the frameless Electron window. */
 
-/* Electron frameless window: the empty desktop is a native drag surface. */
-.desktop-area {
-  -webkit-app-region: drag;
-}
-
-.desktop-area .window98,
-.desktop-area button,
-.desktop-area input,
-.desktop-area select,
-.desktop-area textarea,
-.desktop-area a,
-.taskbar {
-  -webkit-app-region: no-drag;
-}
-
-.desktop-area .window98 {
-  -webkit-user-select: none;
-}
-
-/* Maximized classic windows double as the native drag handle. */
+/* The classic title bar doubles as the native drag surface. */
 .window98.max > .title-bar {
   -webkit-app-region: drag;
 }

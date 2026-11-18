@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../../store";
-import { useShell } from "../../shell";
 import { FORMAT_LIST, FORMATS } from "../../data/catalog";
 import { Button, Check, Dialog, DialogButtons, GroupBox, Mn, Progress, Radio, Tabs } from "../ui";
 import { Icon } from "../Icons";
@@ -475,40 +474,6 @@ export function NewFolderDialog({ parent }: { parent: string }) {
           <Mn text="Folder &name:" />
         </label>
         <input ref={ref} className="field" value={v} onChange={(e) => setV(e.target.value)} spellCheck={false} />
-      </div>
-      <DialogButtons>
-        <Button def onClick={ok}>
-          OK
-        </Button>
-        <Button onClick={app.closeDialog}>Cancel</Button>
-      </DialogButtons>
-    </Dialog>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-export function RunDialog() {
-  const app = useApp();
-  const shell = useShell();
-  const [v, setV] = useState("");
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => ref.current?.focus(), []);
-  const ok = () => {
-    app.closeDialog();
-    const err = shell.runCommand(v);
-    if (err) setTimeout(() => app.msg(v, err, "error"), 50);
-  };
-  return (
-    <Dialog title="Run" icon="run" width={380} onClose={app.closeDialog} onEnter={ok}>
-      <div className="flex gap-3 p-1">
-        <Icon name="run" size={32} />
-        <div className="leading-[14px]">Type the name of a program, folder, document, or Internet resource, and Windows will open it for you.</div>
-      </div>
-      <div className="flex items-center gap-2 px-1 pt-3">
-        <label className="w-[40px]">
-          <Mn text="&Open:" />
-        </label>
-        <input ref={ref} className="field flex-1" value={v} onChange={(e) => setV(e.target.value)} spellCheck={false} placeholder="acdsee, C:\My Documents\My Pictures\Pets" />
       </div>
       <DialogButtons>
         <Button def onClick={ok}>

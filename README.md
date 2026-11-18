@@ -8,8 +8,8 @@ browsing your **real** photo folders.
 
 ## Features
 
-- Classic Win98 desktop shell: taskbar and Start menu, boot splash, draggable
-  browser/viewer windows, menus, toolbars, split panes and modal dialogs
+- Classic Win98 ACDSee chrome: full-window browser and viewer frames, menus,
+  toolbars, split panes and modal dialogs
 - Real filesystem browsing with fast cached thumbnails, lazy dimensions + EXIF
 - Image viewer with zoom, pan, filmstrip, full-screen and slide show
 - Real file operations: copy/move/rename/batch-rename, new folder, trash,
