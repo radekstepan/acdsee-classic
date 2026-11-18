@@ -16,6 +16,8 @@ browsing your **real** photo folders.
   copy to folder, open-with-default-app, show-in-folder
 - Real convert (JPEG/PNG/WebP + quality) and resize, done locally with canvas
 - Real "Set as Wallpaper", print, and recursive Find across folders
+- Remembers settings, view options, pane layout, last folder and window position
+  between runs (stored in `~/.acdsee`)
 - Full keyboard support (F2 rename, Del, F5 refresh, Alt+Enter properties, …)
 - Demo mode: open the dev renderer URL in any browser to click through a sample library
 

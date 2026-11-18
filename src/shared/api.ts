@@ -91,6 +91,10 @@ export type AcdseeApi = {
   exif: (path: string) => Promise<ExifInfo | null>;
   /** Save a data URL to disk (used by Convert / Resize). */
   saveDataUrl: (targetDir: string, fileName: string, dataUrl: string) => Promise<string>;
+  /** Remembered UI state as JSON (`~/.acdsee/state.json`), or null on first run. */
+  loadState: () => Promise<string | null>;
+  /** Replace the remembered UI state on disk. */
+  saveState: (json: string) => Promise<void>;
   createFolder: (parentDir: string, name: string) => Promise<string>;
   rename: (path: string, newName: string) => Promise<string>;
   trash: (paths: string[]) => Promise<void>;

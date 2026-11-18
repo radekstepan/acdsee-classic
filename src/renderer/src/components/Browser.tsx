@@ -16,8 +16,12 @@ export function Browser() {
   const cmd = useCommands();
   const { settings } = app;
   const [ctx, setCtx] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
-  const left = useSplitter(230, 120, 520, "x");
-  const prev = useSplitter(190, 80, 500, "y", true);
+  const left = useSplitter(app.layout.treeWidth, 120, 520, "x", false, (treeWidth) =>
+    app.setLayout({ treeWidth })
+  );
+  const prev = useSplitter(app.layout.previewHeight, 80, 500, "y", true, (previewHeight) =>
+    app.setLayout({ previewHeight })
+  );
   const [address, setAddress] = useState(app.pathText);
 
   useEffect(() => setAddress(app.pathText), [app.pathText]);

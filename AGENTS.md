@@ -27,6 +27,7 @@ src/
   main/        Electron main: window, local-file:// protocol, IPC handlers
     index.ts   app lifecycle, frameless window, protocol with CORS headers
     fs.ts      all acdsee:* filesystem/image handlers (registerFsHandlers)
+    state.ts   ~/.acdsee path helper for remembered state + window geometry
   preload/     contextBridge exposing window.acdsee (see src/shared/api.ts)
   shared/api.ts  IPC contract shared by main/preload/renderer (single source of truth)
   renderer/    React app (electron-vite renderer root)
@@ -38,6 +39,7 @@ src/
       commands.tsx   menus, toolbar commands, context menus
       shell.tsx      close/run-command bridge for the app frame
       data/fs.ts     initial shell, settings, file-entry helpers
+      data/state.ts  remembered UI state (settings, last folder, layout) + ~/.acdsee persistence
       data/catalog.ts image formats + bundled demo-photo list
       demo-data.ts   static sample library for browser/demo mode
       lib/bridge.ts  isDesktop()/desktop() accessors, platform labels
@@ -78,6 +80,13 @@ vendor/original-templates/  the two template zips this app was built from
 - **Real operations:** trash, copy/move, rename, new folder, convert/resize,
   print, wallpaper and open/show-in-folder all go through `src/shared/api.ts`.
   Find walks the real tree via `listDir`; conversions use canvas + `saveDataUrl`.
+- **Remembered state:** `data/state.ts` saves settings, view mode, sort/filter,
+  expanded tree, pane layout, last folder and the Back/Forward trail to
+  `~/.acdsee/state.json` through `acdsee:load-state`/`acdsee:save-state`. The
+  main process keeps window bounds/maximized in `~/.acdsee/window.json`; the web
+  demo uses localStorage. Missing or corrupt state falls back to the defaults,
+  and a remembered folder is re-opened even when its parent chain was never
+  listed (see `adoptPath`).
 - **Imaging without native deps:** dimensions via `image-size`, EXIF via `exifr`,
   convert/resize via canvas + `saveDataUrl`. Both libs are **bundled into main**
   (`exclude` in `electron.vite.config.ts`) because the packaged app ships no

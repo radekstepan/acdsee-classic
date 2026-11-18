@@ -14,6 +14,8 @@ const api: AcdseeApi = {
   exif: (path: string) => ipcRenderer.invoke("acdsee:exif", path),
   saveDataUrl: (targetDir: string, fileName: string, dataUrl: string) =>
     ipcRenderer.invoke("acdsee:save-data-url", targetDir, fileName, dataUrl),
+  loadState: () => ipcRenderer.invoke("acdsee:load-state"),
+  saveState: (json: string) => ipcRenderer.invoke("acdsee:save-state", json),
   createFolder: (parentDir: string, name: string) =>
     ipcRenderer.invoke("acdsee:create-folder", parentDir, name),
   rename: (path: string, newName: string) =>

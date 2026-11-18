@@ -1,9 +1,68 @@
+import { mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { pathToFileURL } from "url";
-import { BrowserWindow, Menu, app, ipcMain, net, protocol, shell } from "electron";
+import { BrowserWindow, Menu, app, ipcMain, net, protocol, screen, shell } from "electron";
 import { registerFsHandlers } from "./fs";
+import { stateDir, stateFile } from "./state";
 
 let mainWindow: BrowserWindow | null = null;
+
+type WindowState = {
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  maximized: boolean;
+};
+
+function loadWindowState(): Partial<WindowState> {
+  try {
+    const raw = JSON.parse(readFileSync(stateFile("window.json"), "utf8")) as Partial<WindowState>;
+    return raw && typeof raw === "object" ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Persist size/position, keeping the restored bounds when maximized. */
+function saveWindowState(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const maximized = mainWindow.isMaximized();
+  const bounds = maximized ? mainWindow.getNormalBounds() : mainWindow.getBounds();
+  try {
+    mkdirSync(stateDir(), { recursive: true });
+    writeFileSync(stateFile("window.json"), JSON.stringify({ ...bounds, maximized }), {
+      encoding: "utf8",
+      mode: 0o600
+    });
+  } catch {
+    /* Remembering the window is best-effort. */
+  }
+}
+
+let windowSaveTimer: NodeJS.Timeout | undefined;
+
+function saveWindowStateSoon(): void {
+  if (windowSaveTimer) clearTimeout(windowSaveTimer);
+  windowSaveTimer = setTimeout(saveWindowState, 300);
+}
+
+/** Restore geometry, but only when it still lands on a connected display. */
+function restoreBounds(saved: Partial<WindowState>): { width: number; height: number; x?: number; y?: number } {
+  const width = Math.max(900, Math.min(10000, Math.round(saved.width ?? 0) || 1280));
+  const height = Math.max(600, Math.min(10000, Math.round(saved.height ?? 0) || 800));
+  const x = typeof saved.x === "number" && Number.isFinite(saved.x) ? Math.round(saved.x) : undefined;
+  const y = typeof saved.y === "number" && Number.isFinite(saved.y) ? Math.round(saved.y) : undefined;
+  if (x === undefined || y === undefined) return { width, height };
+  const visible = screen.getAllDisplays().some(
+    ({ workArea }) =>
+      x < workArea.x + workArea.width &&
+      x + width > workArea.x &&
+      y < workArea.y + workArea.height &&
+      y + height > workArea.y
+  );
+  return visible ? { width, height, x, y } : { width, height };
+}
 
 /**
  * Window/taskbar icon. Packaged builds ship it via `extraResources` (Linux and
@@ -18,9 +77,12 @@ function appIconPath(): string {
 }
 
 function createWindow(): void {
+  const saved = loadWindowState();
+  const bounds = restoreBounds(saved);
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    width: bounds.width,
+    height: bounds.height,
+    ...(bounds.x !== undefined ? { x: bounds.x, y: bounds.y } : {}),
     minWidth: 900,
     minHeight: 600,
     icon: appIconPath(),
@@ -40,8 +102,15 @@ function createWindow(): void {
   });
 
   mainWindow.on("ready-to-show", () => {
+    if (saved.maximized) mainWindow?.maximize();
     mainWindow?.show();
   });
+
+  mainWindow.on("resize", saveWindowStateSoon);
+  mainWindow.on("move", saveWindowStateSoon);
+  mainWindow.on("maximize", saveWindowStateSoon);
+  mainWindow.on("unmaximize", saveWindowStateSoon);
+  mainWindow.on("close", saveWindowState);
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     void shell.openExternal(details.url);

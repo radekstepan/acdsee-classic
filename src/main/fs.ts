@@ -14,6 +14,7 @@ import {
   type SystemPaths,
   type ThumbResult
 } from "../shared/api";
+import { stateDir, stateFile } from "./state";
 
 const IMAGE_EXTS = new Set([
   ".jpg",
@@ -339,6 +340,20 @@ export function registerFsHandlers(): void {
       return target;
     }
   );
+
+  ipcMain.handle("acdsee:load-state", async (): Promise<string | null> => {
+    try {
+      return await fs.readFile(stateFile("state.json"), "utf8");
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle("acdsee:save-state", async (_event, json: string): Promise<void> => {
+    if (typeof json !== "string" || json.length > 1024 * 1024) throw new Error("Invalid state");
+    await fs.mkdir(stateDir(), { recursive: true });
+    await fs.writeFile(stateFile("state.json"), json, { encoding: "utf8", mode: 0o600 });
+  });
 
   ipcMain.handle("acdsee:create-folder", async (_event, parentDir: string, name: string): Promise<string> => {
     const clean = name.trim();

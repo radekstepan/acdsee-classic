@@ -18,6 +18,17 @@ import { ancestors, defaultEdit, fullName, pathOf, sortFiles, uniqueName } from 
 import { DEMO_START_FOLDER, demoFolders } from "./demo-data";
 import { desktop, isDesktop, platformName, trashLabel } from "./lib/bridge";
 import { convertImage, formatInfo, mimeForFileName, resizeImage } from "./lib/imaging";
+import {
+  adoptPath,
+  defaultLayout,
+  loadPersistedState,
+  mergeSettings,
+  restoreHistory,
+  savePersistedState,
+  STATE_VERSION,
+  type LayoutState,
+  type PersistedState
+} from "./data/state";
 import { localFileUrl, type FolderNode, type ListDirResult } from "../../shared/api";
 
 export const DESKTOP_ID = "desktop";
@@ -159,6 +170,12 @@ function useStoreImpl() {
   settingsRef.current = settings;
   const setSettings = useCallback(
     (patch: Partial<Settings>) => setSettingsState((s) => ({ ...s, ...patch })),
+    []
+  );
+
+  const [layout, setLayoutState] = useState<LayoutState>(defaultLayout);
+  const setLayout = useCallback(
+    (patch: Partial<LayoutState>) => setLayoutState((l) => ({ ...l, ...patch })),
     []
   );
 
@@ -627,16 +644,35 @@ function useStoreImpl() {
   /* ---------------- boot ---------------- */
   useEffect(() => {
     let cancelled = false;
+
+    const applySavedPrefs = (saved: PersistedState | null) => {
+      if (!saved) return;
+      const merged = mergeSettings(saved.settings);
+      setSettingsState(merged);
+      settingsRef.current = merged;
+      if (saved.viewMode) setViewMode(saved.viewMode);
+      if (saved.sort) setSort(saved.sort);
+      if (saved.filter) setFilter(saved.filter);
+      if (saved.layout) setLayoutState((l) => ({ ...l, ...saved.layout }));
+    };
+
     async function boot() {
+      const saved = await loadPersistedState();
+      if (cancelled) return;
+      applySavedPrefs(saved);
+
       if (!desktopMode) {
-        if (cancelled) return;
-        const start = DEMO_START_FOLDER;
-        setFolders(demoFolders);
-        foldersRef.current = demoFolders;
-        setNav({ folderId: start, hist: [start], idx: 0 });
-        navRef.current = { folderId: start, hist: [start], idx: 0 };
-        setExpanded(new Set([DESKTOP_ID, "mycomputer", "c", "mydocs", "mypics", start]));
-        const first = demoFolders[start]?.files[0];
+        const folders: Record<string, Folder> = { ...demoFolders };
+        const start =
+          saved?.location && folders[saved.location] ? saved.location : DEMO_START_FOLDER;
+        const startNav = { folderId: start, ...restoreHistory(folders, saved, start) };
+        setFolders(folders);
+        foldersRef.current = folders;
+        setNav(startNav);
+        navRef.current = startNav;
+        const keep = new Set<string>([DESKTOP_ID, "mycomputer", "c", "mydocs", "mypics", start, ...(saved?.expanded ?? [])]);
+        setExpanded(new Set([...keep].filter((id) => !!folders[id])));
+        const first = folders[start]?.files[0];
         setSelectionState(first ? [first.id] : []);
         setFocusId(first?.id ?? null);
         setReady(true);
@@ -671,17 +707,31 @@ function useStoreImpl() {
           ...shell[DESKTOP_ID],
           children: Array.from(new Set([...top, NETWORK_ID, RECYCLE_ID]))
         };
-        setFolders(shell);
-        foldersRef.current = shell;
-        const start =
-          shell[MY_PICTURES_ID] ??
-          Object.values(shell).find((f) => f.parent === DESKTOP_ID && f.path && f.kind === "folder") ??
-          shell[MY_COMPUTER_ID];
-        const startId = start.id;
-        const startNav = { folderId: startId, hist: [startId], idx: 0 };
+        // Re-open the last folder when it still exists; deep paths get their
+        // parent chain rebuilt so the tree and Up button keep working.
+        const folders: Record<string, Folder> = { ...shell };
+        const remembered = saved?.location
+          ? folders[saved.location]
+            ? saved.location
+            : adoptPath(folders, saved.location)
+          : null;
+        const fallback =
+          folders[MY_PICTURES_ID] ??
+          Object.values(folders).find((f) => f.parent === DESKTOP_ID && f.path && f.kind === "folder") ??
+          folders[MY_COMPUTER_ID];
+        const startId = remembered ?? fallback.id;
+        const startNav = { folderId: startId, ...restoreHistory(folders, saved, startId) };
+        setFolders(folders);
+        foldersRef.current = folders;
         setNav(startNav);
         navRef.current = startNav;
-        setExpanded(new Set([DESKTOP_ID, startId, ...ancestors(shell, startId)]));
+        const keep = new Set<string>([
+          DESKTOP_ID,
+          startId,
+          ...ancestors(folders, startId),
+          ...(saved?.expanded ?? [])
+        ]);
+        setExpanded(new Set([...keep].filter((id) => !!folders[id])));
         setReady(true);
         void ensureChildren(MY_COMPUTER_ID);
         await loadFolder(startId, { selectFirst: true });
@@ -698,6 +748,28 @@ function useStoreImpl() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* ---------------- remember app state ---------------- */
+  const saveStateTimer = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!ready) return;
+    const offset = Math.max(0, nav.hist.length - 30);
+    const payload: PersistedState = {
+      version: STATE_VERSION,
+      settings,
+      location: folderId,
+      history: nav.hist.slice(offset),
+      historyIndex: clamp(nav.idx - offset, 0, nav.hist.length - offset - 1),
+      expanded: [...expanded],
+      viewMode,
+      sort,
+      filter,
+      layout
+    };
+    window.clearTimeout(saveStateTimer.current);
+    saveStateTimer.current = window.setTimeout(() => void savePersistedState(payload), 250);
+    return () => window.clearTimeout(saveStateTimer.current);
+  }, [ready, settings, folderId, nav.hist, nav.idx, viewMode, sort, filter, expanded, layout]);
 
   // Lazy EXIF for the focused image.
   /* ---------------- file operations ---------------- */
@@ -1584,6 +1656,8 @@ function useStoreImpl() {
     pathText,
     settings,
     setSettings,
+    layout,
+    setLayout,
     nav,
     canBack: nav.idx > 0,
     canForward: nav.idx < nav.hist.length - 1,

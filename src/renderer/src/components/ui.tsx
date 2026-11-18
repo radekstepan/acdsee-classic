@@ -191,7 +191,8 @@ export function TitleButtons({
       )}
       {onClose && (
         <button className={cn("title-btn", (onMin || onMax) && "gap")} aria-label="Close" onClick={onClose} tabIndex={-1}>
-          <svg width="8" height="7" viewBox="0 0 8 7" shapeRendering="crispEdges">
+          {/* 8px-tall box so flex centering lands on whole pixels (the glyph is 8x7). */}
+          <svg className="close-x" width="8" height="8" viewBox="0 0 8 8" shapeRendering="crispEdges">
             <path d="M0 0h2v1h1v1h2V1h1V0h2v1H7v1H6v1H5v1h1v1h1v1h1v1H6V6H5V5H3v1H2v1H0V6h1V5h1V4h1V3H2V2H1V1H0z" fill="#000" />
           </svg>
         </button>
@@ -647,7 +648,14 @@ export function TooltipLayer() {
 /* ------------------------------------------------------------------ */
 /* Draggable splitter hook                                              */
 /* ------------------------------------------------------------------ */
-export function useSplitter(initial: number, min: number, max: number, axis: "x" | "y", invert = false) {
+export function useSplitter(
+  initial: number,
+  min: number,
+  max: number,
+  axis: "x" | "y",
+  invert = false,
+  onResize?: (size: number) => void
+) {
   const [size, setSize] = useState(initial);
   const onMouseDown = (e: RMouseEvent) => {
     e.preventDefault();
@@ -658,7 +666,9 @@ export function useSplitter(initial: number, min: number, max: number, axis: "x"
     const move = (ev: MouseEvent) => {
       const cur = axis === "x" ? ev.clientX : ev.clientY;
       const d = (cur - start) * (invert ? -1 : 1);
-      setSize(Math.max(min, Math.min(max, startSize + d)));
+      const next = Math.round(Math.max(min, Math.min(max, startSize + d)));
+      setSize(next);
+      onResize?.(next);
     };
     const up = () => {
       document.body.style.cursor = prevCursor;

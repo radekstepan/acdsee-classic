@@ -37,6 +37,7 @@ const files = new Map(); // path -> { name, path, size, mtimeMs, ext }
 const dims = new Map(); // path -> { width, height, format }
 const ops = [];
 const listDirCalls = [];
+const stateSaves = [];
 
 const baseName = (p) => p.split("/").filter(Boolean).pop() ?? p;
 const parentPath = (p) => {
@@ -140,6 +141,20 @@ const createApi = () => ({
 
   exif: async () => null,
 
+  // Remembered UI state: seed a non-default thumbnail size/panel width so the
+  // boot assertions also cover settings + layout restoration.
+  loadState: async () =>
+    JSON.stringify({
+      version: 1,
+      settings: { thumbSize: 128 },
+      location: null,
+      expanded: ["/demo/Pictures"],
+      layout: { treeWidth: 260, previewHeight: 210 }
+    }),
+  saveState: async (json) => {
+    stateSaves.push(json);
+  },
+
   saveDataUrl: async (targetDir, fileName, dataUrl) => {
     const dest = `${targetDir}/${fileName}`;
     ops.push({ op: "saveDataUrl", targetDir, fileName, bytes: dataUrl.length, path: dest });
@@ -232,7 +247,7 @@ const dom = new JSDOM(source, {
   pretendToBeVisual: true,
   virtualConsole,
   beforeParse(window) {
-    window.__acdseeTest = { ops, listDirCalls };
+    window.__acdseeTest = { ops, listDirCalls, stateSaves };
     window.acdsee = createApi();
 
     // jsdom gaps used by the classic panes / viewer.
@@ -348,6 +363,8 @@ const addressInput = [...document.querySelectorAll(".window98 input")].find(
   (el) => el.value === "/demo/Pictures"
 );
 assert(addressInput, "address bar shows /demo/Pictures");
+const sizeSlider = document.querySelector('input[type="range"]');
+assert(sizeSlider && sizeSlider.value === "128", "restores the remembered thumbnail size setting");
 
 /* ---------------- classic shell ---------------- */
 assert(!document.querySelector(".taskbar"), "no Win98 taskbar / Start menu");
@@ -377,6 +394,21 @@ if (tripsLabel) clickElement(tripsLabel);
 
 const arrived = await waitFor(() => fileLabel("trip-1.jpg"), 10000);
 assert(arrived, "clicking Trips in the tree loads its files");
+
+const remembered = await waitFor(() => {
+  for (let i = stateSaves.length - 1; i >= 0; i--) {
+    try {
+      const state = JSON.parse(stateSaves[i]);
+      if (state.location === "/demo/Pictures/Trips") return state;
+    } catch {
+      /* ignore partial writes */
+    }
+  }
+  return null;
+}, 5000);
+assert(remembered?.version === 1, "remembers the last folder after navigation");
+assert(remembered?.settings?.thumbSize === 128, "saved state keeps the restored settings");
+assert(remembered?.layout?.treeWidth === 260, "saved state keeps the restored pane layout");
 assert(listDirCalls.includes("/demo/Pictures/Trips"), "listDir was called with /demo/Pictures/Trips");
 
 /* ---------------- viewer ---------------- */

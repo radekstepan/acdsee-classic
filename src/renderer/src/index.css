@@ -176,6 +176,10 @@ img {
   .title-btn:active {
     box-shadow: inset -1px -1px var(--hi), inset 1px 1px var(--dark), inset -2px -2px var(--light), inset 2px 2px var(--shadow);
   }
+  /* Classic press: only the glyph steps down a pixel, the bevel inverts. */
+  .title-btn:active .close-x {
+    transform: translateY(1px);
+  }
   .title-btn.gap {
     margin-left: 2px;
   }
