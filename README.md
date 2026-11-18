@@ -46,6 +46,22 @@ yarn dist:win    # NSIS installer (run on Windows)
 yarn dist:linux  # AppImage + deb (run on Linux)
 ```
 
+### Linux launcher
+
+On Linux, `yarn publish:linux` packages the app and installs a launcher for it:
+
+```sh
+yarn publish:linux     # build + package, then install the launcher
+yarn launcher:install  # reinstall the launcher from the last package
+yarn launcher:uninstall
+```
+
+It copies the packaged AppImage to `~/.local/share/acdsee-classic`, adds a
+command at `~/.local/bin/acdsee-classic`, and installs both an application-menu
+entry (`~/.local/share/applications`) and a desktop icon. Launch ACDSee Classic
+from your application menu or by double-clicking the desktop icon — no terminal
+or `yarn dev` needed.
+
 macOS builds are unsigned unless you have a Developer ID certificate configured —
 see the [electron-builder code signing docs](https://electron.build/code-signing).
 Windows/Linux installers must be built on their respective platforms (or CI).

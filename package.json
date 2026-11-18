@@ -20,6 +20,9 @@
     "dist:mac": "yarn build && electron-builder --mac",
     "dist:win": "yarn build && electron-builder --win",
     "dist:linux": "yarn build && electron-builder --linux",
+    "publish:linux": "yarn dist:linux && node ./scripts/install-linux-launcher.mjs",
+    "launcher:install": "node ./scripts/install-linux-launcher.mjs",
+    "launcher:uninstall": "node ./scripts/install-linux-launcher.mjs --uninstall",
     "changeset": "changeset",
     "version-packages": "changeset version"
   },
