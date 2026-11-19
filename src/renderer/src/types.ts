@@ -125,6 +125,8 @@ export interface Settings {
   slideRandom: boolean;
   slideTransition: "none" | "fade" | "slide" | "wipe";
   slideCaption: boolean;
+  /** Global UI scale (1 = 100%). Scales text and controls like Windows display scaling. */
+  uiScale: number;
   formats: Record<string, boolean>;
   showToolbar: boolean;
   showAddress: boolean;

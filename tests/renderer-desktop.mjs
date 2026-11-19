@@ -240,6 +240,7 @@ const createApi = () => ({
     close: () => {},
     isMaximized: async () => false,
     setFullScreen: (full) => windowCalls.push({ op: "setFullScreen", full }),
+    setZoomFactor: (factor) => windowCalls.push({ op: "setZoomFactor", factor }),
     onFullScreenChange: () => () => {}
   }
 });
@@ -390,6 +391,10 @@ const addressInput = [...document.querySelectorAll(".window98 input")].find(
 assert(addressInput, "address bar shows /demo/Pictures");
 const sizeSlider = document.querySelector('input[type="range"]');
 assert(sizeSlider && sizeSlider.value === "128", "restores the remembered thumbnail size setting");
+assert(
+  windowCalls.some((call) => call.op === "setZoomFactor" && call.factor === 1),
+  "display scaling goes through the OS window (browser zoom keeps native dropdowns aligned)"
+);
 
 /* ---------------- classic shell ---------------- */
 assert(!document.querySelector(".taskbar"), "no Win98 taskbar / Start menu");

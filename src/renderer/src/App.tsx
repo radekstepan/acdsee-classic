@@ -48,6 +48,22 @@ function Root() {
   const viewerOpen = app.viewer.open;
   const viewerFile = viewerOpen ? app.getFile(app.viewer.fileId) : null;
 
+  // Global UI scale: like Windows display scaling, 125% makes all text and
+  // controls 25% bigger. On desktop this uses browser-level zoom so native
+  // dropdown lists stay aligned; the web demo falls back to CSS zoom.
+  useEffect(() => {
+    const scale = app.settings.uiScale ?? 1;
+    const root = document.documentElement;
+    root.classList.toggle("ui-scaled", scale !== 1);
+    if (app.desktopMode) {
+      root.style.removeProperty("zoom");
+      desktop().window.setZoomFactor?.(scale);
+    } else {
+      if (scale === 1) root.style.removeProperty("zoom");
+      else root.style.setProperty("zoom", String(scale));
+    }
+  }, [app.settings.uiScale, app.desktopMode]);
+
   const closeApp = useCallback(() => {
     app.closeViewer();
     if (app.desktopMode) desktop().window.close();

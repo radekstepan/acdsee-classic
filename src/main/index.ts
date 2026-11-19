@@ -256,6 +256,14 @@ function registerWindowControls(): void {
   ipcMain.on("acdsee:window-set-fullscreen", (_event, full: unknown) => {
     mainWindow?.setFullScreen(full === true);
   });
+  ipcMain.on("acdsee:window-set-zoom", (_event, factor: unknown) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const next =
+      typeof factor === "number" && Number.isFinite(factor)
+        ? Math.min(2, Math.max(0.75, factor))
+        : 1;
+    mainWindow.webContents.setZoomFactor(next);
+  });
 }
 
 function setupMenu(): void {

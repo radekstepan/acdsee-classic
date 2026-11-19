@@ -189,6 +189,7 @@ const windowSends = [
   "acdsee:window-close",
   "acdsee:window-is-maximized",
   "acdsee:window-set-fullscreen",
+  "acdsee:window-set-zoom",
   "acdsee:window-fullscreen-changed"
 ];
 for (const channel of called) {

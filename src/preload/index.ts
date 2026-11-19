@@ -36,6 +36,7 @@ const api: AcdseeApi = {
     close: () => ipcRenderer.send("acdsee:window-close"),
     isMaximized: () => ipcRenderer.invoke("acdsee:window-is-maximized"),
     setFullScreen: (full: boolean) => ipcRenderer.send("acdsee:window-set-fullscreen", full),
+    setZoomFactor: (factor: number) => ipcRenderer.send("acdsee:window-set-zoom", factor),
     onFullScreenChange: (callback: (full: boolean) => void) => {
       const handler = (_event: IpcRendererEvent, full: boolean) => callback(full);
       ipcRenderer.on("acdsee:window-fullscreen-changed", handler);

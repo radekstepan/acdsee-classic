@@ -26,6 +26,7 @@ export const defaultSettings: Settings = {
   slideRandom: false,
   slideTransition: "fade",
   slideCaption: true,
+  uiScale: 1,
   formats: defaultFormats(),
   showToolbar: true,
   showAddress: true,

@@ -70,6 +70,10 @@ export function mergeSettings(raw: unknown): Settings {
   }
   out.thumbSize = clamp(Math.round(out.thumbSize), 48, 160);
   out.slideDelay = clamp(Math.round(out.slideDelay), 1, 60);
+  out.uiScale =
+    typeof out.uiScale === "number" && Number.isFinite(out.uiScale)
+      ? clamp(Math.round(out.uiScale * 100) / 100, 0.75, 2)
+      : 1;
   return out;
 }
 

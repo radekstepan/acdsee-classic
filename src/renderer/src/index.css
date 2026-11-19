@@ -45,6 +45,13 @@ body {
   user-select: none;
 }
 
+/* Display scaling (Options → Interface): fractional zoom stretches the pixel
+   font unevenly, so smooth the glyph edges while scaled. */
+html.ui-scaled body {
+  -webkit-font-smoothing: antialiased;
+  font-smooth: always;
+}
+
 button,
 input,
 select,
@@ -284,7 +291,6 @@ img {
     background: #fff;
     width: 13px;
     height: 13px;
-    position: relative;
   }
   .chk input {
     box-shadow: inset -1px -1px var(--hi), inset 1px 1px var(--shadow), inset -2px -2px var(--light), inset 2px 2px var(--dark);
@@ -298,17 +304,19 @@ img {
     border-radius: 50%;
     width: 12px;
     height: 12px;
-    box-shadow: inset -1px -1px var(--hi), inset 1px 1px var(--shadow), inset -2px -2px var(--light), inset 2px 2px var(--dark);
+    /* One clean round outline plus a faint sunken bevel. Layered 1px/2px
+       inset shadows collapse into a lopsided crescent on a 12px circle —
+       worse once the UI is scaled — so the ring stays a true circle. */
+    box-shadow:
+      0 0 0 1px var(--shadow),
+      inset 1px 1px 0 #dfdfdf,
+      inset -1px -1px 0 var(--hi);
   }
-  .rad input:checked::after {
-    content: "";
-    position: absolute;
-    left: 4px;
-    top: 4px;
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: #000;
+  .rad input:checked {
+    /* Dot as a background, not input::after: it stays centered at any
+       scale and always paints on replaced elements. */
+    background-image: radial-gradient(circle at center, #000 0 2px, transparent 2.5px);
+    background-repeat: no-repeat;
   }
   .chk input:disabled,
   .rad input:disabled {

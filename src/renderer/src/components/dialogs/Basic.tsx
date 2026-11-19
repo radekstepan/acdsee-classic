@@ -264,7 +264,7 @@ export function OptionsDialog({ tab: initialTab = 0 }: { tab?: number }) {
 
   return (
     <Dialog title="Options" icon="settings" width={400} onClose={app.closeDialog} onEnter={ok}>
-      <Tabs tabs={["&Browser", "&Viewer", "&Slide Show", "File &Formats"]} value={tab} onChange={setTab}>
+      <Tabs tabs={["&Browser", "&Viewer", "&Slide Show", "File &Formats", "I&nterface"]} value={tab} onChange={setTab}>
         <div style={{ height: 306 }} className="overflow-hidden">
           {tab === 0 && (
             <div className="flex flex-col gap-1.5">
@@ -351,6 +351,40 @@ export function OptionsDialog({ tab: initialTab = 0 }: { tab?: number }) {
                 <Button small onClick={() => set({ formats: Object.fromEntries(FORMAT_LIST.map((f) => [f.ext, true])) })}>Select All</Button>
                 <Button small onClick={() => set({ formats: Object.fromEntries(FORMAT_LIST.map((f) => [f.ext, false])) })}>Clear All</Button>
               </div>
+            </div>
+          )}
+          {tab === 4 && (
+            <div className="flex flex-col gap-1.5">
+              <GroupBox title="Display scaling">
+                <div className="flex gap-4 flex-wrap">
+                  {[100, 125, 150, 175, 200].map((pct) => (
+                    <Radio
+                      key={pct}
+                      name="uiscale"
+                      label={`${pct}%`}
+                      checked={Math.round((draft.uiScale ?? 1) * 100) === pct}
+                      onChange={() => set({ uiScale: pct / 100 })}
+                    />
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 mt-2">
+                  <span>Custom:</span>
+                  <input
+                    type="range"
+                    className="w98 flex-1"
+                    min={75}
+                    max={200}
+                    step={5}
+                    value={Math.round((draft.uiScale ?? 1) * 100)}
+                    onChange={(e) => set({ uiScale: Number(e.target.value) / 100 })}
+                  />
+                  <span className="w-[46px] text-right">{Math.round((draft.uiScale ?? 1) * 100)}%</span>
+                </div>
+                <div className="mt-1 text-[#404040] leading-[13px]">
+                  Makes all text and controls bigger, like Windows display scaling for high-DPI (4K)
+                  monitors. 125% makes everything 25% bigger. Applies when you press OK or Apply.
+                </div>
+              </GroupBox>
             </div>
           )}
         </div>

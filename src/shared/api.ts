@@ -119,6 +119,9 @@ export type AcdseeApi = {
     close: () => void;
     isMaximized: () => Promise<boolean>;
     setFullScreen: (full: boolean) => void;
+    /** Browser-level display scaling (Options → Interface). Unlike CSS zoom,
+        this also scales native popups, so dropdown lists stay aligned. */
+    setZoomFactor: (factor: number) => void;
     /** Subscribe to OS full-screen changes; returns an unsubscribe function. */
     onFullScreenChange: (callback: (full: boolean) => void) => () => void;
   };
