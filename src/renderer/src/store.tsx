@@ -394,10 +394,10 @@ function useStoreImpl() {
   );
 
   const ensureChildren = useCallback(
-    async (id: string): Promise<void> => {
+    async (id: string, force = false): Promise<void> => {
       if (!desktopMode) return;
       const current = foldersRef.current[id];
-      if (!current || current.loaded) return;
+      if (!current || (current.loaded && !force)) return;
       const requestId =
         id === MY_COMPUTER_ID ? MY_COMPUTER_ID : current.path || (current.kind === "computer" ? id : "");
       if (!requestId) return;
@@ -419,7 +419,9 @@ function useStoreImpl() {
           }
           next[id] = {
             ...parent,
-            children: Array.from(new Set([...parent.children, ...children.map((c) => c.id)])),
+            children: force
+              ? children.map((c) => c.id)
+              : Array.from(new Set([...parent.children, ...children.map((c) => c.id)])),
             loaded: true
           };
           foldersRef.current = next;
@@ -624,7 +626,7 @@ function useStoreImpl() {
       });
     }
     void loadFolder(id);
-    if (fol?.parent) void ensureChildren(fol.parent);
+    if (fol?.parent) void ensureChildren(fol.parent, true);
   }, [desktopMode, ensureChildren, loadFolder]);
 
   useEffect(() => {
