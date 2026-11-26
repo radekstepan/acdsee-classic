@@ -81,7 +81,10 @@ function Root() {
               <Browser />
             </AppWindow>
             {viewerOpen && (
-              <AppWindow title={`ACDSee - [${viewerFile ? fullName(viewerFile) : ""}]`} z={120} onClose={app.closeViewer}>
+              // The viewer frame is the full ACDSee window while a picture is
+              // open, so its title-bar X exits the app like classic ACDSee.
+              // Esc and "Close Viewer" still go back to the browser.
+              <AppWindow title={`ACDSee - [${viewerFile ? fullName(viewerFile) : ""}]`} z={120} onClose={closeApp}>
                 <Viewer />
               </AppWindow>
             )}
